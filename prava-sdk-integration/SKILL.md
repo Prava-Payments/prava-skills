@@ -240,10 +240,12 @@ onSuccess: (result) => {
 
 ### Step 7: Provide Test Data
 
-For sandbox testing, use:
-- **Card number**: `4111 1111 1111 1111`
-- **Expiry**: `12/28`
-- **CVV**: `123`
+**Network test cards are provided by the Prava team.** Reach out to your Prava account manager or the Prava team during onboarding to receive your sandbox test card details.
+
+Once received, the test card will include:
+- **Card number**: 16-digit number provided by Prava
+- **Expiry**: A future date (e.g., `12/28`)
+- **CVV**: 3-digit code provided with the test card
 
 ---
 

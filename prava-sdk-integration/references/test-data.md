@@ -14,17 +14,15 @@ https://sandbox.api.prava.space
 
 ## Test Card Numbers
 
-| Card Number | Brand | Notes |
-|-------------|-------|-------|
-| `4111 1111 1111 1111` | Visa | Standard test card — use this for most testing |
+**Network test cards are provided by the Prava team** for your sandbox environment. Reach out to your Prava account manager or the Prava team during onboarding to receive your test card details.
 
-### Test Card Details
+Once you have your test card, the details will follow this format:
 
-| Field | Value |
-|-------|-------|
-| Card Number | `4111 1111 1111 1111` |
-| Expiry Date | `12/28` (any future date works) |
-| CVV | `123` |
+| Field | Format |
+|-------|--------|
+| Card Number | 16-digit card number provided by Prava |
+| Expiry Date | Future date (e.g., `12/28`) |
+| CVV | 3-digit code provided with the test card |
 
 ---
 
@@ -139,5 +137,5 @@ You can use any string as `user_id`. Some suggestions:
 | Session creation returns 401 | Check your secret key is correct and starts with `sk_test_` |
 | Iframe doesn't load | Verify `iframe_url` from session response; check browser console for errors |
 | Passkey prompt doesn't appear | Ensure you're on HTTPS (or localhost) and using a supported browser |
-| Card validation fails | Use the exact test card: `4111 1111 1111 1111`, expiry: `12/28`, CVV: `123` |
+| Card validation fails | Use the exact test card provided by the Prava team. Reach out to your Prava account manager if you don't have one |
 | "Session expired" error | Sessions last ~15 mins. Create a fresh session |
