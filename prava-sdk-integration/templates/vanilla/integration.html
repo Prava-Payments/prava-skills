@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prava Card Enrollment — Vanilla JS</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .container {
+      max-width: 560px;
+      width: 100%;
+      padding: 32px 24px;
+    }
+    h1 { font-size: 24px; font-weight: 600; margin-bottom: 8px; }
+    .subtitle { color: #64748b; margin-bottom: 32px; font-size: 15px; }
+    .card-form-container {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 2px 8px rgba(0,0,0,0.06);
+      padding: 24px;
+      min-height: 420px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 12px 24px;
+      background: #4f46e5;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #4338ca; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-secondary {
+      background: #f1f5f9;
+      color: #475569;
+      margin-top: 12px;
+    }
+    .btn-secondary:hover { background: #e2e8f0; }
+    .error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      margin-bottom: 16px;
+    }
+    .success {
+      text-align: center;
+      padding: 32px;
+    }
+    .success h2 { color: #059669; font-size: 20px; margin-bottom: 12px; }
+    .success .card-info { font-size: 18px; margin-bottom: 8px; }
+    .success .enrollment-id { font-size: 13px; color: #64748b; }
+    .validation {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 12px;
+      font-size: 13px;
+    }
+    .validation span { color: #9ca3af; }
+    .validation span.valid { color: #059669; }
+    .loading { text-align: center; padding: 32px; color: #64748b; }
+    #prava-iframe-container { min-height: 380px; border-radius: 12px; overflow: hidden; }
+    .divider { text-align: center; color: #94a3b8; margin: 24px 0; font-size: 13px; }
+
+    /* Approach selector */
+    .approach-tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 24px;
+    }
+    .approach-tab {
+      flex: 1;
+      padding: 10px;
+      border: 2px solid #e2e8f0;
+      border-radius: 10px;
+      background: white;
+      cursor: pointer;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: #64748b;
+      transition: all 0.2s;
+    }
+    .approach-tab.active {
+      border-color: #4f46e5;
+      color: #4f46e5;
+      background: #eef2ff;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Checkout</h1>
+    <p class="subtitle">Securely add your card to complete the purchase.</p>
+
+    <!-- Approach Selector -->
+    <div class="approach-tabs">
+      <button class="approach-tab active" onclick="selectApproach('embed')" id="tab-embed">
+        Embed in Page
+      </button>
+      <button class="approach-tab" onclick="selectApproach('newtab')" id="tab-newtab">
+        Open in New Tab
+      </button>
+    </div>
+
+    <!-- Approach A: Embedded Iframe -->
+    <div id="approach-embed">
+      <div class="card-form-container">
+        <div id="error-banner" class="error" style="display: none;"></div>
+        <div id="loading-indicator" class="loading" style="display: none;">
+          Loading secure card form…
+        </div>
+        <div id="validation-state" class="validation" style="display: none;">
+          <span id="val-card">○ Card</span>
+          <span id="val-expiry">○ Expiry</span>
+          <span id="val-cvv">○ CVV</span>
+        </div>
+        <div id="prava-iframe-container"></div>
+        <div id="success-state" class="success" style="display: none;">
+          <h2>✓ Card Enrolled</h2>
+          <p class="card-info" id="success-card"></p>
+          <p class="enrollment-id" id="success-enrollment"></p>
+          <button class="btn btn-secondary" onclick="resetForm()">Enroll Another Card</button>
+        </div>
+        <button class="btn" id="start-btn" onclick="startEmbeddedFlow()">
+          Add Payment Card
+        </button>
+      </div>
+    </div>
+
+    <!-- Approach B: New Tab -->
+    <div id="approach-newtab" style="display: none;">
+      <div class="card-form-container" style="text-align: center; display: flex; flex-direction: column; align-items: center; justify-content: center;">
+        <p style="color: #64748b; margin-bottom: 24px;">
+          You'll be taken to a secure page to enter your card details.
+          After completing, you'll be redirected back here.
+        </p>
+        <button class="btn" onclick="startNewTabFlow()" id="newtab-btn" style="max-width: 300px;">
+          Open Secure Checkout
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Load PravaSDK -->
+  <!-- In production, install via npm: npm install @prava-sdk/core -->
+  <!-- For this demo, we import from the CDN or local build -->
+  <script type="module">
+    import { PravaSDK } from '@prava-sdk/core';
+
+    // ── Configuration ────────────────────────────────────
+    // Replace these with your actual credentials
+    const PUBLISHABLE_KEY = 'pk_test_YOUR_PUBLISHABLE_KEY_HERE';
+    const BACKEND_URL = 'https://sandbox.api.prava.space';
+    const SECRET_KEY = 'sk_test_YOUR_SECRET_KEY_HERE'; // ⚠️ In production, session creation MUST happen on your server!
+
+    let sdkInstance = null;
+
+    // ── Approach Selector ────────────────────────────────
+    window.selectApproach = function(approach) {
+      document.getElementById('approach-embed').style.display = approach === 'embed' ? 'block' : 'none';
+      document.getElementById('approach-newtab').style.display = approach === 'newtab' ? 'block' : 'none';
+      document.getElementById('tab-embed').classList.toggle('active', approach === 'embed');
+      document.getElementById('tab-newtab').classList.toggle('active', approach === 'newtab');
+    };
+
+    // ── Create Session (SERVER-SIDE IN PRODUCTION!) ──────
+    // ⚠️ WARNING: In a real app, this MUST happen on your server.
+    // The secret key should NEVER be in client-side code.
+    // This is only for demo/testing purposes.
+    async function createSession() {
+      const res = await fetch(`${BACKEND_URL}/v1/sessions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SECRET_KEY}`,
+        },
+        body: JSON.stringify({
+          user_id: 'demo_user_001',
+          user_email: 'demo@example.com',
+          amount: '49.99',
+          currency: 'USD',
+          description: 'Demo checkout',
+          purchase_context: [{
+            merchant_details: {
+              name: 'Demo Store',
+              url: 'https://example.com',
+              country_code_iso2: 'US',
+              category_code: '5411',
+              category: 'General',
+            },
+            product_details: [{
+              description: 'Test Product',
+              amount: '49.99',
+              quantity: 1,
+            }],
+            effective_until_minutes: 15,
+          }],
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error?.message || `HTTP ${res.status}`);
+      }
+
+      return res.json();
+    }
+
+    // ── Approach A: Embedded Iframe ──────────────────────
+    window.startEmbeddedFlow = async function() {
+      const errorBanner = document.getElementById('error-banner');
+      const loadingIndicator = document.getElementById('loading-indicator');
+      const validationState = document.getElementById('validation-state');
+      const startBtn = document.getElementById('start-btn');
+      const successState = document.getElementById('success-state');
+      const container = document.getElementById('prava-iframe-container');
+
+      // Reset UI
+      errorBanner.style.display = 'none';
+      successState.style.display = 'none';
+      startBtn.style.display = 'none';
+      loadingIndicator.style.display = 'block';
+
+      // Clean up existing SDK
+      if (sdkInstance) {
+        sdkInstance.destroy();
+        sdkInstance = null;
+      }
+
+      try {
+        // 1. Create session
+        const session = await createSession();
+
+        // 2. Initialize SDK
+        sdkInstance = new PravaSDK({ publishableKey: PUBLISHABLE_KEY });
+
+        // 3. Collect card
+        await sdkInstance.collectPAN({
+          sessionToken: session.session_token,
+          iframeUrl: session.iframe_url,
+          container: container,
+          onReady: () => {
+            loadingIndicator.style.display = 'none';
+            validationState.style.display = 'flex';
+          },
+          onChange: (state) => {
+            document.getElementById('val-card').className = state.cardNumber.isValid ? 'valid' : '';
+            document.getElementById('val-card').textContent = (state.cardNumber.isValid ? '✓' : '○') + ' Card';
+            document.getElementById('val-expiry').className = state.expiry.isValid ? 'valid' : '';
+            document.getElementById('val-expiry').textContent = (state.expiry.isValid ? '✓' : '○') + ' Expiry';
+            document.getElementById('val-cvv').className = state.cvv.isValid ? 'valid' : '';
+            document.getElementById('val-cvv').textContent = (state.cvv.isValid ? '✓' : '○') + ' CVV';
+          },
+          onSuccess: (result) => {
+            validationState.style.display = 'none';
+            container.style.display = 'none';
+            successState.style.display = 'block';
+            document.getElementById('success-card').textContent = `${result.brand} •••• ${result.last4}`;
+            document.getElementById('success-enrollment').textContent = `Enrollment: ${result.enrollmentId}`;
+          },
+          onError: (error) => {
+            errorBanner.textContent = '⚠ ' + error.message;
+            errorBanner.style.display = 'block';
+            loadingIndicator.style.display = 'none';
+          },
+        });
+      } catch (error) {
+        errorBanner.textContent = '⚠ ' + (error.message || 'Unknown error');
+        errorBanner.style.display = 'block';
+        loadingIndicator.style.display = 'none';
+        startBtn.style.display = 'block';
+      }
+    };
+
+    // ── Approach B: New Tab ──────────────────────────────
+    window.startNewTabFlow = async function() {
+      const btn = document.getElementById('newtab-btn');
+      btn.disabled = true;
+      btn.textContent = 'Starting checkout…';
+
+      try {
+        const session = await createSession();
+
+        // Open in new tab — user completes flow there
+        // iframe_url already contains the session token
+        window.open(session.iframe_url, '_blank');
+      } catch (error) {
+        alert('Failed to start checkout: ' + (error.message || 'Unknown error'));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Open Secure Checkout';
+      }
+    };
+
+    // ── Reset ────────────────────────────────────────────
+    window.resetForm = function() {
+      if (sdkInstance) {
+        sdkInstance.destroy();
+        sdkInstance = null;
+      }
+      document.getElementById('success-state').style.display = 'none';
+      document.getElementById('prava-iframe-container').style.display = 'block';
+      document.getElementById('start-btn').style.display = 'block';
+      document.getElementById('validation-state').style.display = 'none';
+    };
+  </script>
+</body>
+</html>
