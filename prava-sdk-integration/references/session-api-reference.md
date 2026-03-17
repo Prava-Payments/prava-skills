@@ -92,16 +92,18 @@ Each entry in `purchase_context` describes a merchant and their products:
 
 ```json
 {
+  "session_id": "sess_01KKW...",
   "session_token": "eyJhbGciOiJIUzI1NiIs...",
-  "iframe_url": "https://collect.prava.space",
-  "order_id": "ord_abc123def456",
+  "iframe_url": "https://sandbox.collect.prava.space?session=eyJ...",
+  "order_id": "ord_01KKW...",
   "expires_at": "2026-03-16T15:30:00.000Z"
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `session_token` | `string` | JWT session token — pass this to the frontend SDK or as a URL parameter |
+| `session_id` | `string` | Unique session identifier — **required for polling payment result** |
+| `session_token` | `string` | JWT session token — pass this to the frontend SDK |
 | `iframe_url` | `string` | The URL to open/embed — this is the PCI-compliant card enrollment page |
 | `order_id` | `string` | Unique order identifier for tracking |
 | `expires_at` | `string` | ISO 8601 timestamp when the session expires |
@@ -155,11 +157,113 @@ Each entry in `purchase_context` describes a merchant and their products:
 
 ---
 
-## Validate Session
+## Get Payment Result
+
+### `GET /v1/sessions/{session_id}/payment-result`
+
+Returns the payment result for a session, including the one-time payment credential (network token + dynamic CVV). **This is how your server retrieves the payment credential after the user completes the flow.**
+
+### Authentication
+
+```
+Authorization: Bearer {MERCHANT_SECRET_KEY}
+```
+
+> ⚠️ Uses your **secret key** (not the session token). This is a server-side only call.
+
+### Path Parameters
+
+| Parameter | Description |
+|-----------|-------------|
+| `session_id` | The `session_id` from the create session response (e.g., `sess_01KKW...`) |
+
+### Success Response (200)
+
+```json
+{
+  "session_id": "sess_01KKW...",
+  "order_id": "ord_01KKW...",
+  "status": "completed",
+  "transactions": [
+    {
+      "txn_id": "txn_01KKW...",
+      "status": "completed",
+      "token": "4323126882557932",
+      "dynamic_cvv": "957",
+      "expiry_month": "12",
+      "expiry_year": "2027"
+    }
+  ]
+}
+```
+
+### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `session_id` | `string` | Session identifier |
+| `order_id` | `string \| null` | Order identifier |
+| `status` | `string` | `"pending"`, `"completed"`, or `"failed"` |
+| `transactions` | `array` | Array of transaction objects |
+
+### Transaction Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `txn_id` | `string` | Unique transaction identifier |
+| `status` | `string` | `"completed"` or `"failed"` |
+| `token` | `string \| null` | **Visa network token** (16 digits) — not the user's real card number |
+| `dynamic_cvv` | `string \| null` | **One-time CVV** (3 digits) — changes per transaction |
+| `expiry_month` | `string \| null` | Token expiry month (2-digit MM, e.g., `"12"`) |
+| `expiry_year` | `string \| null` | Token expiry year (4-digit YYYY, e.g., `"2027"`) |
+| `error` | `object \| undefined` | Present if `status` is `"failed"` — `{ code: string, message: string }` |
+
+### Polling Pattern
+
+The payment result isn't available immediately. Poll until `status` changes from `"pending"`:
+
+```typescript
+// Server-side polling
+async function pollForCredential(sessionId: string): Promise<any> {
+  for (let i = 0; i < 30; i++) {
+    const res = await fetch(
+      `${BACKEND_URL}/v1/sessions/${sessionId}/payment-result`,
+      { headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` } }
+    );
+    const data = await res.json();
+
+    if (data.status === 'completed') return data.transactions[0];
+    if (data.status === 'failed') throw new Error(data.transactions[0]?.error?.message);
+
+    await new Promise(r => setTimeout(r, 3000)); // 3s interval
+  }
+  throw new Error('Polling timed out');
+}
+```
+
+### Error Responses
+
+| Status | Meaning |
+|--------|---------|
+| `404` | Session not found |
+| `401` | Invalid or missing secret key |
+
+### cURL Example
+
+```bash
+curl -s https://sandbox.api.prava.space/v1/sessions/{session_id}/payment-result \
+  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" | jq
+```
+
+---
+
+## Validate Session (Internal)
 
 ### `GET /v1/sessions/validate`
 
-Validates a session token and returns session details. Used internally by the iframe.
+> ⚠️ **This endpoint is used internally by the Prava iframe.** Merchants do not need to call this directly. To get payment results, use `GET /v1/sessions/{id}/payment-result` instead.
+
+Validates a session token and returns session details.
 
 ### Authentication
 

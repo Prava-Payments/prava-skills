@@ -1,17 +1,21 @@
 /**
- * PravaCardForm — React Component for Card Enrollment
+ * PravaCardForm — React Component for Secure Card Collection
  *
- * This component handles the complete card enrollment flow:
- * 1. Creates a session via server action
- * 2. Mounts the Prava secure iframe
- * 3. Handles validation, success, and error states
+ * This component mounts the Prava PCI-compliant iframe for card enrollment.
+ * It accepts a PRE-CREATED session as a prop — the parent is responsible for
+ * creating the session (so both iframe and polling use the same session_id).
  *
  * Usage:
+ *   // Parent creates session first:
+ *   const session = await createPravaSession({ userId, userEmail, amount });
+ *
+ *   // Then passes it to this component:
  *   <PravaCardForm
- *     userId="user_123"
- *     userEmail="user@example.com"
- *     onSuccess={(result) => console.log('Card enrolled:', result)}
+ *     session={session}
+ *     onError={(err) => console.error(err)}
  *   />
+ *
+ *   // Parent polls for result using session.session_id
  *
  * Place this file in: src/components/PravaCardForm.tsx
  */
@@ -19,10 +23,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { PravaSDK } from '@prava-sdk/core';
-import type { CollectPANResult, PravaError, CardValidationState } from '@prava-sdk/core';
-
-// Import your server action (adjust path as needed)
-import { createPravaSession } from '@/app/actions';
+import type { PravaError, CardValidationState } from '@prava-sdk/core';
 
 // ── Configuration ─────────────────────────────────────────
 const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_PUBLISHABLE_KEY || '';
@@ -30,51 +31,37 @@ const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_PUBLISHABLE_KEY || '';
 // ── Props ──────────────────────────────────────────────────
 
 interface PravaCardFormProps {
-  /** Your app's user ID */
-  userId: string;
-  /** User's email */
-  userEmail: string;
-  /** Transaction amount (default: "99.99") */
-  amount?: string;
-  /** Currency code (default: "USD") */
-  currency?: string;
-  /** Called when card is successfully enrolled */
-  onSuccess?: (result: CollectPANResult) => void;
+  /** Pre-created session from the server action */
+  session: {
+    session_token: string;
+    iframe_url: string;
+    order_id: string;
+    expires_at: string;
+  };
   /** Called when an error occurs */
   onError?: (error: PravaError | Error) => void;
-  /** Custom class name for the container */
-  className?: string;
 }
 
 // ── Component ──────────────────────────────────────────────
 
-export default function PravaCardForm({
-  userId,
-  userEmail,
-  amount = '99.99',
-  currency = 'USD',
-  onSuccess,
-  onError,
-  className = '',
-}: PravaCardFormProps) {
-  // Refs
+export default function PravaCardForm({ session, onError }: PravaCardFormProps) {
   const sdkRef = useRef<PravaSDK | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // State
-  const [loading, setLoading] = useState(false);
+  // Guard for React Strict Mode double-mount.
+  // In dev, React mounts → unmounts → remounts. Without this guard,
+  // the SDK gets destroyed on the first cleanup and never re-initializes.
+  const hasStarted = useRef(false);
+
+  const [loading, setLoading] = useState(true);
   const [sdkReady, setSdkReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [validationState, setValidationState] = useState<CardValidationState | null>(null);
-  const [cardResult, setCardResult] = useState<CollectPANResult | null>(null);
 
-  // ── Start the enrollment flow ─────────────────────────────
-  const startEnrollment = useCallback(async () => {
+  const mountSdk = useCallback(async () => {
     setLoading(true);
     setError(null);
     setSdkReady(false);
-    setValidationState(null);
-    setCardResult(null);
 
     // Clean up any existing SDK instance
     if (sdkRef.current) {
@@ -83,19 +70,9 @@ export default function PravaCardForm({
     }
 
     try {
-      // 1. Create session via server action
-      const session = await createPravaSession({
-        userId,
-        userEmail,
-        amount,
-        currency,
-      });
-
-      // 2. Initialize PravaSDK
       const sdk = new PravaSDK({ publishableKey: PUBLISHABLE_KEY });
       sdkRef.current = sdk;
 
-      // 3. Mount iframe and collect card
       if (containerRef.current) {
         await sdk.collectPAN({
           sessionToken: session.session_token,
@@ -103,80 +80,68 @@ export default function PravaCardForm({
           container: containerRef.current,
           onReady: () => {
             setSdkReady(true);
+            setLoading(false);
           },
-          onChange: (state) => {
-            setValidationState(state);
-          },
-          onSuccess: (result) => {
-            setCardResult(result);
-            onSuccess?.(result);
-          },
-          onError: (err) => {
+          onChange: (state: CardValidationState) => setValidationState(state),
+          onSuccess: () => {}, // Completion handled by parent via polling
+          onError: (err: PravaError) => {
             setError(err.message);
             onError?.(err);
           },
         });
       }
     } catch (err) {
-      const errorMsg = err instanceof Error ? err.message : 'Unknown error';
-      setError(errorMsg);
-      onError?.(err instanceof Error ? err : new Error(errorMsg));
-    } finally {
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      setError(msg);
+      onError?.(err instanceof Error ? err : new Error(msg));
       setLoading(false);
     }
-  }, [userId, userEmail, amount, currency, onSuccess, onError]);
+  }, [session, onError]);
 
-  // ── Auto-start on mount ──────────────────────────────────
+  // Mount SDK on first render (handles React Strict Mode double-mount)
   useEffect(() => {
-    startEnrollment();
-
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      mountSdk();
+    }
     return () => {
       sdkRef.current?.destroy();
       sdkRef.current = null;
+      hasStarted.current = false; // Allow re-init on next mount (Strict Mode)
     };
-  }, [startEnrollment]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // ── Reset and start over ─────────────────────────────────
-  const handleReset = () => {
-    sdkRef.current?.destroy();
-    sdkRef.current = null;
-    setCardResult(null);
-    startEnrollment();
-  };
+  // Fallback: detect iframe in container if onReady doesn't fire.
+  // In some cases the SDK's onReady callback doesn't trigger — this
+  // MutationObserver catches the iframe appearing in the DOM.
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container || sdkReady) return;
+
+    const hideLoading = () => {
+      setSdkReady(true);
+      setLoading(false);
+    };
+
+    const observer = new MutationObserver(() => {
+      if (container.querySelector('iframe')) hideLoading();
+    });
+    observer.observe(container, { childList: true, subtree: true });
+
+    // Hard fallback — hide loading after 5s regardless
+    const timeout = setTimeout(() => setLoading(false), 5000);
+
+    return () => {
+      observer.disconnect();
+      clearTimeout(timeout);
+    };
+  }, [sdkReady]);
 
   // ── Render ────────────────────────────────────────────────
 
-  // Success state
-  if (cardResult) {
-    return (
-      <div className={className}>
-        <div style={{ padding: '24px', textAlign: 'center' }}>
-          <h3 style={{ color: '#059669', marginBottom: '12px' }}>✓ Card Enrolled Successfully</h3>
-          <p>
-            {cardResult.brand} •••• {cardResult.last4}
-          </p>
-          <p style={{ fontSize: '14px', color: '#6b7280' }}>
-            Enrollment ID: {cardResult.enrollmentId}
-          </p>
-          <button
-            onClick={handleReset}
-            style={{
-              marginTop: '16px',
-              padding: '8px 16px',
-              borderRadius: '8px',
-              border: '1px solid #d1d5db',
-              cursor: 'pointer',
-            }}
-          >
-            Enroll Another Card
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={className}>
+    <div>
       {/* Error banner */}
       {error && (
         <div style={{
@@ -188,27 +153,30 @@ export default function PravaCardForm({
           color: '#dc2626',
           fontSize: '14px',
         }}>
-          ⚠ {error}
+          <p style={{ fontWeight: 500 }}>Error</p>
+          <p style={{ marginTop: '2px' }}>{error}</p>
+          <button onClick={mountSdk} style={{
+            marginTop: '8px', fontSize: '14px', fontWeight: 500,
+            color: '#dc2626', textDecoration: 'underline', cursor: 'pointer',
+            background: 'none', border: 'none', padding: 0,
+          }}>
+            Try Again
+          </button>
         </div>
       )}
 
       {/* Loading indicator */}
-      {loading && !sdkReady && (
-        <div style={{ textAlign: 'center', padding: '24px', color: '#6b7280' }}>
+      {loading && !sdkReady && !error && (
+        <div style={{ textAlign: 'center', padding: '48px 0', color: '#6b7280' }}>
           Loading secure card form…
         </div>
       )}
 
       {/* Validation state */}
-      {validationState && (
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          marginBottom: '12px',
-          fontSize: '13px',
-        }}>
+      {validationState && sdkReady && (
+        <div style={{ display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '12px', fontWeight: 500 }}>
           <span style={{ color: validationState.cardNumber.isValid ? '#059669' : '#9ca3af' }}>
-            {validationState.cardNumber.isValid ? '✓' : '○'} Card
+            {validationState.cardNumber.isValid ? '✓' : '○'} Card Number
           </span>
           <span style={{ color: validationState.expiry.isValid ? '#059669' : '#9ca3af' }}>
             {validationState.expiry.isValid ? '✓' : '○'} Expiry
@@ -216,6 +184,9 @@ export default function PravaCardForm({
           <span style={{ color: validationState.cvv.isValid ? '#059669' : '#9ca3af' }}>
             {validationState.cvv.isValid ? '✓' : '○'} CVV
           </span>
+          {validationState.isComplete && (
+            <span style={{ marginLeft: 'auto', color: '#059669', fontWeight: 600 }}>All fields valid ✓</span>
+          )}
         </div>
       )}
 
@@ -223,11 +194,7 @@ export default function PravaCardForm({
       <div
         ref={containerRef}
         id="prava-card-form"
-        style={{
-          minHeight: '400px',
-          borderRadius: '12px',
-          overflow: 'hidden',
-        }}
+        style={{ minHeight: '400px', borderRadius: '12px', overflow: 'hidden' }}
       />
     </div>
   );

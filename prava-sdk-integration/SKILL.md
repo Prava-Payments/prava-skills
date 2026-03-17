@@ -175,12 +175,15 @@ The server must call Prava's backend to create a session. This is where the secr
 **The session response returns:**
 ```typescript
 {
-  session_token: string,    // JWT token for the session
+  session_id: string,       // Unique session ID — REQUIRED for polling payment result
+  session_token: string,    // JWT token for the session — pass to frontend SDK
   iframe_url: string,       // URL to open/embed — this is the card enrollment page
   order_id: string,         // Order tracking ID
   expires_at: string,       // ISO 8601 expiration timestamp
 }
 ```
+
+> **Important:** Store `session_id` on your server — you need it to poll for the payment credential in Step 8.
 
 ### Step 5: Create Frontend Integration
 
@@ -246,6 +249,49 @@ Once received, the test card will include:
 - **Card number**: 16-digit number provided by Prava
 - **Expiry**: A future date (e.g., `12/28`)
 - **CVV**: 3-digit code provided with the test card
+
+### Step 8: Poll for Payment Credential (Server-Side)
+
+After the user completes the card flow in the iframe, your server must poll for the payment credential. This is how you get the **network token + dynamic CVV** that your AI agent uses to transact.
+
+```typescript
+// Server-side: GET /v1/sessions/{session_id}/payment-result
+// Auth: Bearer {MERCHANT_SECRET_KEY} (NOT the session_token)
+
+const res = await fetch(
+  `${BACKEND_URL}/v1/sessions/${session.session_id}/payment-result`,
+  { headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` } }
+);
+const data = await res.json();
+// data.status: "pending" | "completed" | "failed"
+// data.transactions[0].token         → Network token (16 digits)
+// data.transactions[0].dynamic_cvv   → One-time CVV (3 digits)
+// data.transactions[0].expiry_month  → "12"
+// data.transactions[0].expiry_year   → "2027"
+```
+
+**Polling pattern:** Call every 3 seconds until `status` is `"completed"` or `"failed"`. Timeout after ~90 seconds.
+
+> **Key details:**
+> - Use `session_id` in the URL path (NOT `session_token`)
+> - Authenticate with your `MERCHANT_SECRET_KEY` (NOT the session token)
+> - The `token` field is a **Visa network token** — not the user's real card number
+> - The `dynamic_cvv` is **single-use** and changes every transaction
+> - See `references/session-api-reference.md` for full response schema
+
+---
+
+## Known Gotchas
+
+These are common pitfalls discovered during integration. Address them proactively:
+
+| Gotcha | Problem | Solution |
+|--------|---------|----------|
+| **React Strict Mode double-mount** | In development, React 18 mounts/unmounts/remounts components. The SDK gets destroyed on the first cleanup and the `hasStarted` guard prevents re-initialization. | Use a `hasStarted` ref that resets to `false` in the cleanup function. See the card-form template. |
+| **Next.js fetch caching** | Next.js may cache or deduplicate identical fetch requests, even with `cache: 'no-store'`. Polling returns stale "pending" responses. | Add a cache-buster query param: `?_t=${Date.now()}` and `next: { revalidate: 0 }` to fetch options. |
+| **Duplicate session creation** | If the parent component creates a session (for polling) and the card form component creates its own (for the iframe), the user pays on one session while polling checks a different one. | Create the session **once** in the parent, pass it as a prop to the card form component. Both iframe and polling use the same `session_id`. |
+| **`onReady` callback may not fire** | In some cases the SDK's `onReady` callback doesn't trigger, leaving the loading spinner visible even though the iframe is loaded. | Add a `MutationObserver` on the container to detect when the iframe appears, plus a fallback timeout (5 seconds). |
+| **Polling with wrong identifier** | Using `session_token` instead of `session_id` in the payment-result URL, or using `session_token` as Bearer auth instead of the secret key. | Always use `session_id` in the URL path and `MERCHANT_SECRET_KEY` as Bearer auth. |
 
 ---
 

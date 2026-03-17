@@ -57,7 +57,7 @@ Step 1: AI App (Server)
 │   ├── user_id, user_email
 │   ├── amount, currency
 │   └── purchase_context (merchant details + products)
-├── Receive: session_token, iframe_url, order_id
+├── Receive: session_id, session_token, iframe_url, order_id
 └── Pass session_token + iframe_url to frontend
 
 Step 2: AI App (Frontend)
@@ -99,7 +99,7 @@ Step 6: Completion
 | Step | Who | Data |
 |------|-----|------|
 | Session creation | Your server → Prava | secret_key, user_id, user_email, amount, currency, purchase_context |
-| Session response | Prava → Your server | session_token, iframe_url, order_id, expires_at |
+| Session response | Prava → Your server | session_id, session_token, iframe_url, order_id, expires_at |
 | Frontend init | Your frontend → Iframe | session_token, publishable_key |
 | Card submission | User → Iframe → Prava | Raw card data (never touches your app) |
 | Success | Iframe → Your frontend | enrollmentId, last4, brand, expMonth, expYear |
@@ -146,6 +146,61 @@ Sometimes you want to onboard a card without an immediate purchase (e.g., "Conne
 ### Difference from Buy Flow
 
 The session is created with the same API, but the session intent indicates registration-only. The user goes through the same card entry and passkey flow, but no payment is charged. The card is stored for future use.
+
+---
+
+## Flow 4: Getting the Payment Credential (Server-Side Polling)
+
+After the user completes the card flow in the iframe, your server polls for the one-time payment credential. This is the network token + dynamic CVV your AI agent uses to transact.
+
+### Step-by-Step
+
+```
+Step 1: User completes card flow
+├── Embedded: onSuccess callback fires (card enrolled)
+├── New tab: user sees success page
+└── In both cases, the payment is processing server-side
+
+Step 2: Your Server polls for result
+├── GET /v1/sessions/{session_id}/payment-result
+├── Auth: Bearer {MERCHANT_SECRET_KEY}  ← secret key, NOT session_token
+├── Poll every 3 seconds
+└── Check data.status
+
+Step 3: Status transitions
+├── "pending"   → Keep polling (payment still processing)
+├── "completed" → Credential ready! Extract from transactions[0]
+└── "failed"    → Error occurred, check transactions[0].error
+
+Step 4: Extract credential (when status === "completed")
+├── token         → Visa network token (16 digits, NOT user's real card)
+├── dynamic_cvv   → One-time CVV (3 digits, changes per transaction)
+├── expiry_month  → "12" (2-digit MM)
+└── expiry_year   → "2027" (4-digit YYYY)
+
+Step 5: AI agent uses credential
+├── Network token can be used like a card number
+├── Dynamic CVV is the security code
+└── Agent transacts on user's behalf at any merchant
+```
+
+### Key Data
+
+| Step | Who | Data |
+|------|-----|------|
+| Poll request | Your server → Prava | `session_id` in URL, `MERCHANT_SECRET_KEY` in Bearer header |
+| Poll response (pending) | Prava → Your server | `{ status: "pending", transactions: [] }` |
+| Poll response (completed) | Prava → Your server | `{ status: "completed", transactions: [{ token, dynamic_cvv, expiry_month, expiry_year }] }` |
+| Poll response (failed) | Prava → Your server | `{ status: "failed", transactions: [{ error: { code, message } }] }` |
+
+### Common Mistakes
+
+| Mistake | Correct Approach |
+|---------|-----------------|
+| Using `session_token` in the URL | Use `session_id` (e.g., `sess_01KKW...`) |
+| Using `session_token` as Bearer auth | Use `MERCHANT_SECRET_KEY` (`sk_test_...`) |
+| Calling `/v1/sessions/validate` | Use `/v1/sessions/{id}/payment-result` (validate is internal) |
+| Expecting 2-digit expiry year | API returns 4-digit year (e.g., `"2027"`) |
 
 ---
 

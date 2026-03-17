@@ -19,11 +19,29 @@ const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 // ── Types ──────────────────────────────────────────────────
 
-interface SessionResponse {
+export interface SessionResponse {
+  session_id: string;
   session_token: string;
   expires_at: string;
   iframe_url: string;
   order_id: string;
+}
+
+export interface PaymentTransaction {
+  txn_id: string;
+  status: 'completed' | 'failed' | string;
+  token: string | null;
+  dynamic_cvv: string | null;
+  expiry_month: string | null;
+  expiry_year: string | null;
+  error?: { code: string; message: string };
+}
+
+export interface PaymentResultResponse {
+  session_id: string;
+  order_id: string | null;
+  status: 'pending' | 'completed' | 'failed' | string;
+  transactions: PaymentTransaction[];
 }
 
 interface CreateSessionParams {
@@ -117,6 +135,43 @@ export async function createPravaSession({
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({ error: { message: 'Unknown error' } }));
     throw new Error(errorData.error?.message || `Failed to create session (HTTP ${res.status})`);
+  }
+
+  return res.json();
+}
+
+/**
+ * Polls for the payment result after the user completes the card flow.
+ *
+ * Use session_id (NOT session_token) and authenticate with your secret key.
+ * Returns the network token + dynamic CVV when status is "completed".
+ *
+ * Usage:
+ *   const result = await pollPaymentResult(session.session_id);
+ *   // result.transactions[0].token → Visa network token
+ *   // result.transactions[0].dynamic_cvv → one-time CVV
+ */
+export async function pollPaymentResult(sessionId: string): Promise<PaymentResultResponse> {
+  if (!MERCHANT_SECRET_KEY) {
+    throw new Error('MERCHANT_SECRET_KEY not configured.');
+  }
+
+  // Cache-buster: Next.js can aggressively cache/deduplicate identical fetches.
+  // Adding ?_t=timestamp + cache: 'no-store' + next: { revalidate: 0 } prevents stale responses.
+  const res = await fetch(
+    `${BACKEND_URL}/v1/sessions/${sessionId}/payment-result?_t=${Date.now()}`,
+    {
+      method: 'GET',
+      headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` },
+      cache: 'no-store',
+      next: { revalidate: 0 },
+    }
+  );
+
+  if (!res.ok) {
+    if (res.status === 404) throw new Error('Session not found');
+    const errorData = await res.json().catch(() => ({ error: { message: 'Unknown error' } }));
+    throw new Error(errorData.error?.message || `Failed to poll result (HTTP ${res.status})`);
   }
 
   return res.json();

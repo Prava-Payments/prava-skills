@@ -81,12 +81,15 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
 Expected response:
 ```json
 {
+  "session_id": "sess_01KKW...",
   "session_token": "eyJhbGciOiJIUzI1NiIs...",
-  "iframe_url": "https://collect.prava.space",
-  "order_id": "ord_...",
+  "iframe_url": "https://sandbox.collect.prava.space?session=eyJ...",
+  "order_id": "ord_01KKW...",
   "expires_at": "2026-03-16T15:30:00.000Z"
 }
 ```
+
+> **Important:** Store `session_id` — you'll need it to poll for the payment result via `GET /v1/sessions/{session_id}/payment-result`.
 
 ---
 

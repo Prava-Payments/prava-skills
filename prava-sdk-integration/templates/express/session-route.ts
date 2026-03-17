@@ -124,6 +124,47 @@ router.post('/create-session', async (req: Request, res: Response) => {
 });
 
 /**
+ * GET /api/prava/payment-result/:sessionId
+ *
+ * Polls for the payment result after the user completes the card flow.
+ * Uses session_id (from create-session response) and the secret key.
+ * Returns the network token + dynamic CVV when status is "completed".
+ */
+router.get('/payment-result/:sessionId', async (req: Request, res: Response) => {
+  try {
+    if (!MERCHANT_SECRET_KEY) {
+      return res.status(500).json({ error: 'MERCHANT_SECRET_KEY not configured.' });
+    }
+
+    const { sessionId } = req.params;
+
+    const response = await fetch(
+      `${BACKEND_URL}/v1/sessions/${sessionId}/payment-result`,
+      {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` },
+      }
+    );
+
+    if (!response.ok) {
+      if (response.status === 404) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      const errorData = await response.json().catch(() => ({}));
+      return res.status(response.status).json({
+        error: errorData.error?.message || `Prava API error (HTTP ${response.status})`,
+      });
+    }
+
+    const data = await response.json();
+    return res.json(data);
+  } catch (error) {
+    console.error('[Prava] Failed to get payment result:', error);
+    return res.status(500).json({ error: 'Failed to get payment result' });
+  }
+});
+
+/**
  * GET /api/prava/health
  *
  * Check if the Prava backend is reachable.
