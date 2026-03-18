@@ -295,6 +295,83 @@ These are common pitfalls discovered during integration. Address them proactivel
 
 ---
 
+## Adapting to the User's Project
+
+**The templates in this skill are LOGIC references, not ready-to-use UI.** When integrating Prava into a user's project, you MUST adapt to their existing design system, patterns, and code style. Never impose a specific UI — the templates teach you the flow; the user's project tells you the look.
+
+### Before Writing Any Code, Scan the User's Project
+
+1. **Detect the styling approach:**
+   - Check for `tailwind.config.*` → Tailwind CSS (use utility classes)
+   - Check for `*.module.css` files → CSS Modules
+   - Check for `styled-components` or `@emotion` in `package.json` → CSS-in-JS
+   - Check for a UI library (`@shadcn/ui`, `@mui/material`, `@chakra-ui/react`, `antd`, `@mantine/core`) → Use their components
+   - No specific approach → Use minimal inline styles or plain CSS
+
+2. **Detect existing component patterns:**
+   - How do they handle **loading states**? (Spinner component? Skeleton? Loading.tsx?)
+   - How do they handle **errors**? (Toast? Alert component? Error boundary?)
+   - How do they handle **forms**? (React Hook Form? Formik? Custom?)
+   - How do they structure **pages**? (Layout components? Containers? Grid systems?)
+
+3. **Detect where to place the integration:**
+   - Is there an existing checkout page? → Integrate there
+   - Is there a settings/account page? → Add card management there
+   - Is this an AI agent app? → Find the purchase trigger point
+   - No obvious place? → Create a new page matching their existing page structure
+
+4. **Detect auth patterns:**
+   - How do they get the current user's ID and email? (NextAuth? Clerk? Custom?)
+   - Use their auth system for `userId` and `userEmail` — never hardcode
+
+### What to Adapt vs. What to Keep
+
+| Keep Exactly (Critical Logic) | Adapt to User's Project |
+|------|------|
+| `hasStarted` ref + Strict Mode cleanup pattern | All visual rendering (loading, error, success states) |
+| MutationObserver + 5s timeout fallback for onReady | CSS/styling approach (Tailwind, CSS modules, etc.) |
+| Session created ONCE in parent, passed as prop | Component structure and file organization |
+| Polling with `session_id` + `MERCHANT_SECRET_KEY` | Page layout, navigation, and routing |
+| SDK cleanup on unmount (`sdkRef.current?.destroy()`) | Auth system integration (where userId/email come from) |
+| Cache-busting on poll requests (`?_t=${Date.now()}`) | Error handling patterns (toast, alert, inline, etc.) |
+| `onSuccess: () => {}` (completion via polling, not callback) | Product/amount source (cart, AI context, props, etc.) |
+
+### Example: Detecting and Using Tailwind
+
+If the project uses Tailwind, transform the template's bare HTML:
+```tsx
+// Template (logic reference — no styling):
+{error && <div role="alert"><p>{error}</p></div>}
+
+// Adapted for Tailwind project:
+{error && (
+  <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700" role="alert">
+    <p className="font-medium">Error</p>
+    <p className="mt-1">{error}</p>
+  </div>
+)}
+```
+
+### Example: Using an Existing Component Library (shadcn/ui)
+
+If the project has shadcn/ui, use their components:
+```tsx
+// Template (logic reference):
+{loading && <div>Loading…</div>}
+{error && <div role="alert"><p>{error}</p><button onClick={retry}>Try Again</button></div>}
+
+// Adapted for shadcn/ui project:
+{loading && <Skeleton className="h-[400px] w-full rounded-xl" />}
+{error && (
+  <Alert variant="destructive">
+    <AlertDescription>{error}</AlertDescription>
+    <Button variant="outline" size="sm" onClick={retry}>Try Again</Button>
+  </Alert>
+)}
+```
+
+---
+
 ## Framework-Specific Instructions
 
 ### Next.js (App Router)

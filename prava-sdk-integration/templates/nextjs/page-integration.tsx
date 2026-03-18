@@ -1,14 +1,26 @@
 /**
- * Example Page Integration — Next.js App Router
+ * Prava Checkout Page — State Machine Template
  *
- * Shows the CORRECT pattern: parent creates session once, then:
- *   - Passes session to PravaCardForm (for iframe)
- *   - Uses session.session_id to poll for payment result
+ * PURPOSE: This template demonstrates the FLOW LOGIC for a complete Prava checkout.
+ * It is NOT a ready-to-use page — adapt all rendering to the user's existing
+ * design system, layout, and component patterns.
  *
- * This avoids the duplicate-session bug where iframe and polling
- * use different sessions.
+ * STATE MACHINE:
+ *   idle → loading → (card-entry + polling) → completed | failed
  *
- * Place this in: src/app/checkout/page.tsx (or any page)
+ * CRITICAL LOGIC (do not change):
+ *   - Session created ONCE in parent, shared by iframe + polling (prevents duplicate-session bug)
+ *   - Polling uses session_id (not session_token) with MERCHANT_SECRET_KEY
+ *   - Polling interval: 3s, with cleanup on unmount
+ *   - For embed: PravaCardForm mounts iframe; for newtab: window.open(iframe_url)
+ *
+ * ADAPT:
+ *   - All rendering → user's design system (components, styling, layout)
+ *   - Where this lives → user's existing checkout page, settings page, or wherever it fits
+ *   - User ID / email source → user's auth system (not hardcoded)
+ *   - Amount / product info → user's cart, product context, or AI agent context
+ *
+ * Place this in: wherever the checkout or card enrollment flow lives in the user's app
  */
 'use client';
 
@@ -17,10 +29,18 @@ import PravaCardForm from '@/components/PravaCardForm';
 import { createPravaSession, pollPaymentResult } from '@/app/actions';
 import type { SessionResponse, PaymentResultResponse, PaymentTransaction } from '@/app/actions';
 
-type Approach = 'embed' | 'newtab';
+// ── Flow State ─────────────────────────────────────────────
+// The checkout flow is a simple state machine:
+//
+//   IDLE          → User hasn't started yet. Show a "Pay" button or trigger.
+//   LOADING       → Session is being created on the server.
+//   CARD_ENTRY    → Session created. Iframe is mounted (embed) or opened (newtab).
+//                   Simultaneously polling for payment result.
+//   COMPLETED     → Payment succeeded. Credential (token + CVV) is available.
+//   FAILED        → Payment failed. Show error, allow retry.
 
 export default function CheckoutPage() {
-  const [approach, setApproach] = useState<Approach>('embed');
+  // ── State ──────────────────────────────────────────────────
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -30,9 +50,17 @@ export default function CheckoutPage() {
   const [polling, setPolling] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const started = !!session;
+  // Derived state
+  const isIdle = !session && !paymentResult && !loading;
+  const isCardEntry = !!session && !paymentResult;
+  const isCompleted = paymentResult?.status === 'completed';
+  const isFailed = paymentResult?.status === 'failed';
 
-  // ── Start checkout ─────────────────────────────────────────
+  const completedTxn: PaymentTransaction | null =
+    isCompleted ? paymentResult.transactions[0] ?? null : null;
+
+  // ── Start Checkout ─────────────────────────────────────────
+  // Call this when the user clicks "Pay" or when the AI agent triggers a purchase.
 
   const handleCheckout = async () => {
     setLoading(true);
@@ -40,23 +68,23 @@ export default function CheckoutPage() {
     setPaymentResult(null);
 
     try {
-      // 1. Create session ONCE — same session for iframe + polling
+      // ADAPT: Get userId and userEmail from your auth system, not hardcoded
+      // ADAPT: Get amount/currency from your cart, product, or AI agent context
       const s = await createPravaSession({
-        userId: 'user_123',           // ← Replace with actual user ID
-        userEmail: 'user@example.com', // ← Replace with actual user email
-        amount: '49.99',
-        currency: 'USD',
+        userId: 'user_123',            // ← Replace: from your auth context
+        userEmail: 'user@example.com', // ← Replace: from your auth context
+        amount: '49.99',               // ← Replace: from your product/cart
+        currency: 'USD',               // ← Replace: from your product/cart
       });
       setSession(s);
 
-      // 2. Start polling for payment result
+      // Start polling immediately — it runs in parallel with the iframe
       startPolling(s.session_id);
 
-      // 3. For new-tab approach, open the iframe URL
-      if (approach === 'newtab') {
-        window.open(s.iframe_url, '_blank');
-      }
-      // For embed approach, PravaCardForm will mount the iframe automatically
+      // ADAPT: Choose embed or newtab based on your UX needs
+      // For newtab approach, uncomment:
+      // window.open(s.iframe_url, '_blank');
+
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to start checkout');
     } finally {
@@ -64,7 +92,9 @@ export default function CheckoutPage() {
     }
   };
 
-  // ── Polling ────────────────────────────────────────────────
+  // ── Polling Logic ──────────────────────────────────────────
+  // Polls GET /v1/sessions/{session_id}/payment-result every 3s.
+  // Stops when status is "completed" or "failed".
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) {
@@ -85,11 +115,13 @@ export default function CheckoutPage() {
           setPaymentResult(result);
           stopPolling();
         }
+        // status === 'pending' → keep polling
       } catch {
-        // Keep polling on transient errors
+        // Keep polling on transient errors (network glitches, etc.)
       }
     };
 
+    // Poll immediately, then every 3 seconds
     doPoll();
     pollingRef.current = setInterval(doPoll, 3000);
   };
@@ -110,112 +142,76 @@ export default function CheckoutPage() {
     setError(null);
   };
 
-  const completedTxn: PaymentTransaction | null =
-    paymentResult?.status === 'completed' ? paymentResult.transactions[0] ?? null : null;
-
   // ── Render ─────────────────────────────────────────────────
+  //
+  // ADAPT EVERYTHING BELOW to the user's design system.
+  // This rendering is intentionally minimal — it only shows the state transitions.
+  //
+  // Map each state to the appropriate UI in the user's app:
+  //   IDLE       → "Pay" button, product summary, etc.
+  //   LOADING    → Loading spinner / skeleton
+  //   CARD_ENTRY → PravaCardForm component (iframe) + polling indicator
+  //   COMPLETED  → Success message + credential display (or just navigate away)
+  //   FAILED     → Error message + retry option
 
   return (
-    <div style={{ maxWidth: '600px', margin: '0 auto', padding: '32px 16px' }}>
-      <h1 style={{ fontSize: '24px', fontWeight: 600, marginBottom: '8px' }}>
-        Checkout
-      </h1>
-      <p style={{ color: '#6b7280', marginBottom: '32px' }}>
-        Securely add your card to complete the purchase.
-      </p>
-
-      {/* Error */}
+    <div>
+      {/* ADAPT: Error display — use your app's toast, alert, or error component */}
       {error && (
-        <div style={{
-          padding: '12px 16px', marginBottom: '16px',
-          backgroundColor: '#fef2f2', border: '1px solid #fecaca',
-          borderRadius: '8px', color: '#dc2626', fontSize: '14px',
-        }}>
-          ⚠ {error}
+        <div role="alert">
+          <p>{error}</p>
         </div>
       )}
 
-      {/* Checkout button (before session is created) */}
-      {!started && !paymentResult && (
-        <button
-          onClick={handleCheckout}
-          disabled={loading}
-          style={{
-            width: '100%', padding: '12px 24px',
-            backgroundColor: '#4f46e5', color: 'white', border: 'none',
-            borderRadius: '10px', fontSize: '15px', fontWeight: 500,
-            cursor: loading ? 'not-allowed' : 'pointer',
-            opacity: loading ? 0.6 : 1,
-          }}
-        >
-          {loading ? 'Creating session…' : 'Pay $49.99'}
+      {/* STATE: IDLE — Show checkout trigger */}
+      {/* ADAPT: This could be a button, a product card, or triggered by an AI agent */}
+      {isIdle && (
+        <button onClick={handleCheckout} disabled={loading}>
+          {loading ? 'Creating session…' : 'Pay'}
         </button>
       )}
 
-      {/* Embedded card form (shown after session is created) */}
-      {approach === 'embed' && session && !paymentResult && (
-        <div style={{
-          background: 'white', borderRadius: '16px', padding: '24px',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
-        }}>
+      {/* STATE: CARD_ENTRY — Iframe is mounted, polling is running */}
+      {/* ADAPT: Wrap in your page layout, card container, modal, etc. */}
+      {isCardEntry && session && (
+        <div>
+          {/* The card form component — mounts the Prava iframe */}
           <PravaCardForm
             session={session}
             onError={(err) => setError(err.message)}
           />
+
+          {/* ADAPT: Polling indicator — show however fits your UX */}
+          {polling && <p>Waiting for payment completion…</p>}
+
+          {/* ADAPT: Cancel/back option */}
+          <button onClick={handleReset}>Cancel</button>
         </div>
       )}
 
-      {/* Polling indicator */}
-      {polling && !paymentResult && (
-        <p style={{ textAlign: 'center', color: '#6b7280', marginTop: '16px', fontSize: '14px' }}>
-          Waiting for payment completion…
-        </p>
-      )}
-
-      {/* Success: show the credential */}
-      {completedTxn && (
-        <div style={{
-          padding: '32px', textAlign: 'center',
-          backgroundColor: '#f0fdf4', borderRadius: '16px',
-          border: '1px solid #bbf7d0',
-        }}>
-          <h2 style={{ color: '#059669', fontSize: '20px', marginBottom: '16px' }}>
-            ✓ Payment Complete
-          </h2>
-          <div style={{ fontSize: '14px', color: '#374151' }}>
-            <p><strong>Network Token:</strong> {completedTxn.token}</p>
-            <p><strong>Dynamic CVV:</strong> {completedTxn.dynamic_cvv}</p>
-            <p><strong>Expiry:</strong> {completedTxn.expiry_month}/{completedTxn.expiry_year}</p>
-          </div>
-          <button
-            onClick={handleReset}
-            style={{
-              marginTop: '16px', padding: '8px 16px',
-              borderRadius: '8px', border: '1px solid #d1d5db',
-              cursor: 'pointer', background: 'white',
-            }}
-          >
-            Start New Checkout
-          </button>
+      {/* STATE: COMPLETED — Payment succeeded, credential available */}
+      {/* ADAPT: Show success in your app's style. You may want to:
+          - Display the credential (for testing/debugging)
+          - Navigate to a confirmation page
+          - Pass the credential to the AI agent
+          - Simply show a success message */}
+      {isCompleted && completedTxn && (
+        <div>
+          <h2>Payment Complete</h2>
+          <p>Network Token: {completedTxn.token}</p>
+          <p>Dynamic CVV: {completedTxn.dynamic_cvv}</p>
+          <p>Expiry: {completedTxn.expiry_month}/{completedTxn.expiry_year}</p>
+          <button onClick={handleReset}>New Checkout</button>
         </div>
       )}
 
-      {/* Failed */}
-      {paymentResult?.status === 'failed' && (
-        <div style={{
-          padding: '24px', backgroundColor: '#fef2f2',
-          borderRadius: '16px', border: '1px solid #fecaca',
-        }}>
-          <h2 style={{ color: '#dc2626', fontSize: '18px' }}>Payment Failed</h2>
-          <p style={{ color: '#dc2626', fontSize: '14px' }}>
-            {paymentResult.transactions[0]?.error?.message || 'Unknown error'}
-          </p>
-          <button onClick={handleReset} style={{
-            marginTop: '12px', padding: '8px 16px', borderRadius: '8px',
-            border: '1px solid #d1d5db', cursor: 'pointer', background: 'white',
-          }}>
-            Try Again
-          </button>
+      {/* STATE: FAILED — Payment failed */}
+      {/* ADAPT: Show error in your app's style with retry option */}
+      {isFailed && (
+        <div>
+          <h2>Payment Failed</h2>
+          <p>{paymentResult?.transactions[0]?.error?.message || 'Unknown error'}</p>
+          <button onClick={handleReset}>Try Again</button>
         </div>
       )}
     </div>
