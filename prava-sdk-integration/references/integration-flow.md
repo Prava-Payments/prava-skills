@@ -55,7 +55,7 @@ This flow is used when a user is connecting their card for the first time.
 Step 1: AI App (Server)
 ├── Call POST /v1/sessions with:
 │   ├── user_id, user_email
-│   ├── amount, currency
+│   ├── total_amount, currency
 │   └── purchase_context (merchant details + products)
 ├── Receive: session_id, session_token, iframe_url, order_id
 └── Pass session_token + iframe_url to frontend
@@ -98,7 +98,7 @@ Step 6: Completion
 
 | Step | Who | Data |
 |------|-----|------|
-| Session creation | Your server → Prava | secret_key, user_id, user_email, amount, currency, purchase_context |
+| Session creation | Your server → Prava | secret_key, user_id, user_email, total_amount, currency, purchase_context |
 | Session response | Prava → Your server | session_id, session_token, iframe_url, order_id, expires_at |
 | Frontend init | Your frontend → Iframe | session_token, publishable_key |
 | Card submission | User → Iframe → Prava | Raw card data (never touches your app) |

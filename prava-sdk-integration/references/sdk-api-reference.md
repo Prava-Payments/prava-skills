@@ -184,25 +184,21 @@ The SDK communicates with the iframe via PostMessage. These are the event types:
 |-------|---------|-------------|
 | `PRAVA_READY` | `void` | Iframe is loaded and ready |
 | `PRAVA_CHANGE` | `CardValidationState` | Card field validation changed |
-| `PRAVA_SUCCESS` | `CollectPANResult` | Card enrolled successfully |
 | `PRAVA_ERROR` | `PravaError` | An error occurred |
 | `PRAVA_RESIZE` | `{ height: number }` | Iframe requests height change |
 | `PRAVA_ENROLLMENT_COMPLETE` | Enrollment data | Full enrollment completed |
 | `PRAVA_SAVED_CARDS_LOADED` | Cards list | Saved cards loaded (repeat flow) |
-| `PRAVA_PASSKEY_VERIFY_REQUIRED` | Passkey data | Passkey verification needed |
-| `PRAVA_TRANSACTION_COMPLETE` | Transaction data | Payment transaction completed |
 | `PRAVA_TRANSACTION_CREATED` | Transaction data | Transaction created |
+| `PRAVA_TRANSACTION_COMPLETE` | `{ callback_url?: string }` | Payment completed. If `callback_url` present, SDK keeps bridge alive for redirect |
+| `PRAVA_REDIRECT` | `{ url: string }` | Iframe requests redirect to merchant callback URL — SDK navigates via `window.location.href` |
 
 ### SDK → Iframe Commands
 
 | Command | Description |
 |---------|-------------|
 | `PRAVA_INIT` | Initialize iframe with publishableKey and styles |
-| `PRAVA_SUBMIT` | Trigger form submission |
-| `PRAVA_FOCUS` | Focus a specific field |
-| `PRAVA_CLEAR` | Clear form fields |
-| `PRAVA_PASSKEY_VERIFY_COMPLETE` | Passkey verification result |
-| `PRAVA_PASSKEY_VERIFY_FAILED` | Passkey verification failed |
+| `PRAVA_PASSKEY_VERIFY_COMPLETE` | Send passkey verification result (assuranceData) to iframe |
+| `PRAVA_PASSKEY_VERIFY_FAILED` | Notify iframe that passkey verification failed |
 
 ---
 

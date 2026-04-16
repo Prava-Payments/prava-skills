@@ -197,7 +197,7 @@
         body: JSON.stringify({
           user_id: 'demo_user_001',
           user_email: 'demo@example.com',
-          amount: '49.99',
+          total_amount: '49.99',
           currency: 'USD',
           description: 'Demo checkout',
           purchase_context: [{
@@ -210,7 +210,7 @@
             },
             product_details: [{
               description: 'Test Product',
-              amount: '49.99',
+              unit_price: '49.99',
               quantity: 1,
             }],
             effective_until_minutes: 15,

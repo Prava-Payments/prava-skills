@@ -53,7 +53,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
   -d '{
     "user_id": "test_user_001",
     "user_email": "test@example.com",
-    "amount": "9.99",
+    "total_amount": "9.99",
     "currency": "USD",
     "description": "Test checkout",
     "purchase_context": [
@@ -68,7 +68,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
         "product_details": [
           {
             "description": "Test Product",
-            "amount": "9.99",
+            "unit_price": "9.99",
             "quantity": 1
           }
         ],

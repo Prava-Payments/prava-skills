@@ -18,7 +18,7 @@
  *
  * Usage:
  *   // Parent creates session first:
- *   const session = await createPravaSession({ userId, userEmail, amount });
+ *   const session = await createPravaSession({ userId, userEmail, totalAmount });
  *   // Then passes it to this component:
  *   <PravaCardForm session={session} onError={(err) => console.error(err)} />
  *   // Parent polls for result using session.session_id
