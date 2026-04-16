@@ -27,20 +27,36 @@ export interface SessionResponse {
   order_id: string;
 }
 
-export interface PaymentTransaction {
-  txn_id: string;
-  status: 'completed' | 'failed' | string;
+export interface PaymentLineItem {
+  txn_ref_id: string;
+  merchant_name: string;
+  merchant_url: string;
+  total_amount: string;
+  status: string;
   token: string | null;
   dynamic_cvv: string | null;
   expiry_month: string | null;
   expiry_year: string | null;
+  products: Array<{
+    product_ref_id: string;
+    external_product_id: string | null;
+    name: string;
+    unit_price: string;
+    quantity: number;
+  }>;
+}
+
+export interface PaymentTransaction {
+  txn_id: string;
+  status: 'pending' | 'awaiting_result' | 'completed' | 'failed' | string;
+  line_items: PaymentLineItem[];
   error?: { code: string; message: string };
 }
 
 export interface PaymentResultResponse {
   session_id: string;
   order_id: string | null;
-  status: 'pending' | 'completed' | 'failed' | string;
+  status: 'pending' | 'awaiting_result' | 'completed' | 'failed' | string;
   transactions: PaymentTransaction[];
 }
 
@@ -49,12 +65,14 @@ interface CreateSessionParams {
   userId: string;
   /** User's email address */
   userEmail: string;
-  /** Transaction amount (e.g., "99.99") */
-  amount?: string;
+  /** Transaction total amount (e.g., "99.99") */
+  totalAmount?: string;
   /** Currency code (ISO 4217, e.g., "USD") */
   currency?: string;
   /** Order description */
   description?: string;
+  /** HTTPS redirect URL after payment completion */
+  callbackUrl?: string;
   /** Custom purchase context (optional — defaults provided) */
   purchaseContext?: Array<{
     merchant_details: {
@@ -66,7 +84,7 @@ interface CreateSessionParams {
     };
     product_details: Array<{
       description: string;
-      amount: string;
+      unit_price: string;
       quantity?: number;
     }>;
     effective_until_minutes?: number;
@@ -84,9 +102,10 @@ interface CreateSessionParams {
 export async function createPravaSession({
   userId,
   userEmail,
-  amount = '99.99',
+  totalAmount = '99.99',
   currency = 'USD',
   description,
+  callbackUrl,
   purchaseContext,
 }: CreateSessionParams): Promise<SessionResponse> {
   // Validate secret key is configured
@@ -107,9 +126,10 @@ export async function createPravaSession({
     body: JSON.stringify({
       user_id: userId,
       user_email: userEmail,
-      amount,
+      total_amount: totalAmount,
       currency,
       description: description || 'Purchase',
+      ...(callbackUrl && { callback_url: callbackUrl }),
       purchase_context: purchaseContext || [
         {
           merchant_details: {
@@ -122,7 +142,7 @@ export async function createPravaSession({
           product_details: [
             {
               description: 'Purchase',
-              amount: amount,
+              unit_price: totalAmount,
               quantity: 1,
             },
           ],
@@ -148,8 +168,8 @@ export async function createPravaSession({
  *
  * Usage:
  *   const result = await pollPaymentResult(session.session_id);
- *   // result.transactions[0].token → Visa network token
- *   // result.transactions[0].dynamic_cvv → one-time CVV
+ *   // result.transactions[0].line_items[0].token → Visa network token
+ *   // result.transactions[0].line_items[0].dynamic_cvv → one-time CVV
  */
 export async function pollPaymentResult(sessionId: string): Promise<PaymentResultResponse> {
   if (!MERCHANT_SECRET_KEY) {

@@ -31,7 +31,7 @@ const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 interface CreateSessionBody {
   userId: string;
   userEmail: string;
-  amount?: string;
+  totalAmount?: string;
   currency?: string;
   description?: string;
 }
@@ -56,7 +56,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
     const {
       userId,
       userEmail,
-      amount = '99.99',
+      totalAmount = '99.99',
       currency = 'USD',
       description,
     } = req.body as CreateSessionBody;
@@ -78,7 +78,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
       body: JSON.stringify({
         user_id: userId,
         user_email: userEmail,
-        amount,
+        total_amount: totalAmount,
         currency,
         description: description || 'Purchase',
         purchase_context: [
@@ -93,7 +93,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
             product_details: [
               {
                 description: description || 'Purchase',
-                amount: amount,
+                unit_price: totalAmount,
                 quantity: 1,
               },
             ],

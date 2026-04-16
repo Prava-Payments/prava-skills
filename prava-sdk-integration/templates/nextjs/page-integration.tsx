@@ -56,8 +56,8 @@ export default function CheckoutPage() {
   const isCompleted = paymentResult?.status === 'completed';
   const isFailed = paymentResult?.status === 'failed';
 
-  const completedTxn: PaymentTransaction | null =
-    isCompleted ? paymentResult.transactions[0] ?? null : null;
+  const completedTxn = isCompleted ? paymentResult.transactions[0] ?? null : null;
+  const completedLineItem = completedTxn?.line_items?.[0] ?? null;
 
   // ── Start Checkout ─────────────────────────────────────────
   // Call this when the user clicks "Pay" or when the AI agent triggers a purchase.
@@ -69,11 +69,11 @@ export default function CheckoutPage() {
 
     try {
       // ADAPT: Get userId and userEmail from your auth system, not hardcoded
-      // ADAPT: Get amount/currency from your cart, product, or AI agent context
+      // ADAPT: Get totalAmount/currency from your cart, product, or AI agent context
       const s = await createPravaSession({
         userId: 'user_123',            // ← Replace: from your auth context
         userEmail: 'user@example.com', // ← Replace: from your auth context
-        amount: '49.99',               // ← Replace: from your product/cart
+        totalAmount: '49.99',          // ← Replace: from your product/cart
         currency: 'USD',               // ← Replace: from your product/cart
       });
       setSession(s);
@@ -198,9 +198,9 @@ export default function CheckoutPage() {
       {isCompleted && completedTxn && (
         <div>
           <h2>Payment Complete</h2>
-          <p>Network Token: {completedTxn.token}</p>
-          <p>Dynamic CVV: {completedTxn.dynamic_cvv}</p>
-          <p>Expiry: {completedTxn.expiry_month}/{completedTxn.expiry_year}</p>
+          <p>Network Token: {completedLineItem?.token}</p>
+          <p>Dynamic CVV: {completedLineItem?.dynamic_cvv}</p>
+          <p>Expiry: {completedLineItem?.expiry_month}/{completedLineItem?.expiry_year}</p>
           <button onClick={handleReset}>New Checkout</button>
         </div>
       )}

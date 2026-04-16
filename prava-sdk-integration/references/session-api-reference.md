@@ -31,7 +31,7 @@ Authorization: Bearer sk_test_xxxxx
 {
   "user_id": "user_123",
   "user_email": "user@example.com",
-  "amount": "99.99",
+  "total_amount": "99.99",
   "currency": "USD",
   "description": "AI-assisted purchase",
   "purchase_context": [
@@ -46,7 +46,7 @@ Authorization: Bearer sk_test_xxxxx
       "product_details": [
         {
           "description": "Premium AI Assistant - Monthly",
-          "amount": "99.99",
+          "unit_price": "99.99",
           "quantity": 1
         }
       ],
@@ -64,11 +64,15 @@ Authorization: Bearer sk_test_xxxxx
 | `user_email` | `string` | ✅ | Valid email | User's email address |
 | `user_phone` | `string` | | Min 1 char | User's phone number |
 | `user_country_code_iso2` | `string` | | 2 uppercase letters | User's country (ISO 3166-1 alpha-2, e.g., "US") |
-| `amount` | `string` | ✅ | Regex: `^\d+(\.\d{1,2})?$` | Transaction amount (e.g., "99.99") |
+| `total_amount` | `string` | ✅ | Regex: `^\d+(\.\d{1,2})?$` | Transaction total amount (e.g., "99.99") |
 | `currency` | `string` | ✅ | 3 uppercase letters (ISO 4217) | Currency code (e.g., "USD", "EUR", "GBP") |
 | `external_order_ref` | `string` | | Max 255 chars | Your internal order reference ID |
+| `callback_url` | `string` | | HTTPS URL, max 2048 chars | Redirect URL after payment completion |
 | `description` | `string` | | | Order description |
 | `purchase_context` | `array` | ✅ | Min 1 entry | Purchase context array (see below) |
+| `card` | `object` | | | Pre-select a saved card (skip card entry) |
+| `card.card_id` | `string` | | | ID of a previously saved card |
+| `card.vault_ref_id` | `string` | | Valid UUID | Encrypted card reference from Skyflow vault |
 
 ### Purchase Context Entry
 
@@ -84,7 +88,8 @@ Each entry in `purchase_context` describes a merchant and their products:
 | `merchant_details.category` | `string` | | Human-readable category (max 100 chars) |
 | `product_details` | `array` | ✅ | At least one product |
 | `product_details[].description` | `string` | ✅ | Product description |
-| `product_details[].amount` | `string` | ✅ | Product amount |
+| `product_details[].unit_price` | `string` | ✅ | Product unit price |
+| `product_details[].product_id` | `string` | | Max 50 chars. Your internal product ID |
 | `product_details[].quantity` | `number` | | Default: 1 |
 | `effective_until_minutes` | `number` | | Default: 15. How long this context is valid |
 
@@ -137,7 +142,7 @@ Each entry in `purchase_context` describes a merchant and their products:
     "message": "Invalid request body",
     "details": {
       "fieldErrors": {
-        "amount": ["Must be a valid amount (e.g., \"99.99\")"],
+        "total_amount": ["Must be a valid amount (e.g., \"99.99\")"],
         "currency": ["Must be 3 uppercase letters (ISO 4217, e.g., \"USD\")"]
       }
     }
@@ -188,10 +193,28 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
     {
       "txn_id": "txn_01KKW...",
       "status": "completed",
-      "token": "4323126882557932",
-      "dynamic_cvv": "957",
-      "expiry_month": "12",
-      "expiry_year": "2027"
+      "line_items": [
+        {
+          "txn_ref_id": "tli_01KKW...",
+          "merchant_name": "My AI App",
+          "merchant_url": "https://myaiapp.com",
+          "total_amount": "99.99",
+          "status": "completed",
+          "token": "4323126882557932",
+          "dynamic_cvv": "957",
+          "expiry_month": "12",
+          "expiry_year": "2027",
+          "products": [
+            {
+              "product_ref_id": "ref_01KKW...",
+              "external_product_id": null,
+              "name": "Premium AI Assistant - Monthly",
+              "unit_price": "99.99",
+              "quantity": 1
+            }
+          ]
+        }
+      ]
     }
   ]
 }
@@ -203,7 +226,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
 |-------|------|-------------|
 | `session_id` | `string` | Session identifier |
 | `order_id` | `string \| null` | Order identifier |
-| `status` | `string` | `"pending"`, `"completed"`, or `"failed"` |
+| `status` | `string` | `"pending"`, `"awaiting_result"`, `"completed"`, or `"failed"` |
 | `transactions` | `array` | Array of transaction objects |
 
 ### Transaction Object
@@ -211,12 +234,24 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
 | Field | Type | Description |
 |-------|------|-------------|
 | `txn_id` | `string` | Unique transaction identifier |
-| `status` | `string` | `"completed"` or `"failed"` |
+| `status` | `string` | `"pending"`, `"awaiting_result"`, `"completed"`, or `"failed"` |
+| `line_items` | `array` | One entry per merchant in the purchase context |
+| `error` | `object \| undefined` | Present if `status` is `"failed"` — `{ code: string, message: string }` |
+
+### Line Item Object
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `txn_ref_id` | `string` | Line item ID — **use this for `report-status`** |
+| `merchant_name` | `string` | Merchant name from purchase context |
+| `merchant_url` | `string` | Merchant URL from purchase context |
+| `total_amount` | `string` | Line item total |
+| `status` | `string` | Line item status |
 | `token` | `string \| null` | **Visa network token** (16 digits) — not the user's real card number |
 | `dynamic_cvv` | `string \| null` | **One-time CVV** (3 digits) — changes per transaction |
 | `expiry_month` | `string \| null` | Token expiry month (2-digit MM, e.g., `"12"`) |
 | `expiry_year` | `string \| null` | Token expiry year (4-digit YYYY, e.g., `"2027"`) |
-| `error` | `object \| undefined` | Present if `status` is `"failed"` — `{ code: string, message: string }` |
+| `products` | `array` | Products in this line item |
 
 ### Polling Pattern
 
@@ -232,7 +267,7 @@ async function pollForCredential(sessionId: string): Promise<any> {
     );
     const data = await res.json();
 
-    if (data.status === 'completed') return data.transactions[0];
+    if (data.status === 'completed') return data.transactions[0].line_items[0];
     if (data.status === 'failed') throw new Error(data.transactions[0]?.error?.message);
 
     await new Promise(r => setTimeout(r, 3000)); // 3s interval
@@ -282,9 +317,113 @@ Authorization: Bearer {session_token}
   "expires_at": "2026-03-16T15:30:00.000Z",
   "allowed_domains": ["https://myaiapp.com"],
   "customer_email": "user@example.com",
-  "customer_phone": null
+  "customer_phone": null,
+  "callback_url": "https://myaiapp.com/success"
 }
 ```
+
+---
+
+## Report Payment Outcome
+
+### `POST /v1/sessions/{session_id}/report-status`
+
+After your server processes the payment credential (network token + dynamic CVV), you **must** report the outcome back so Prava can relay it to Visa via the Confirmations API.
+
+### Authentication
+
+```
+Authorization: Bearer {MERCHANT_SECRET_KEY}
+```
+
+### Request Body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `txn_ref_id` | `string` | ✅ | Transaction line item ID from `payment-result` response (`line_items[].txn_ref_id`) |
+| `txn_status` | `string` | ✅ | `"APPROVED"` or `"DECLINED"` |
+| `txn_type` | `string` | | Default: `"PURCHASE"` |
+| `authorization_code` | `string` | | Max 128 chars. Auth code from your payment processor |
+| `response_code` | `string` | | Max 2 chars. Processor response code |
+| `amount_paid` | `string` | | Actual amount charged (if different from order amount) |
+| `product_statuses` | `array` | | Per-product status updates |
+| `product_statuses[].product_ref_id` | `string` | | Product ref ID from payment-result |
+| `product_statuses[].status` | `string` | | `"COMPLETED"`, `"FAILED"`, `"CANCELED"`, `"INPROGRESS"`, `"PENDING"`, `"ONHOLD"` |
+
+### Success Response (200)
+
+```json
+{
+  "status": "confirmed",
+  "txn_ref_id": "tli_01KKW...",
+  "txn_status": "APPROVED",
+  "visa_confirmation": "SUCCESS"
+}
+```
+
+### cURL Example
+
+```bash
+curl -X POST "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../report-status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
+  -d '{
+    "txn_ref_id": "tli_01KKW...",
+    "txn_status": "APPROVED",
+    "authorization_code": "AUTH123"
+  }'
+```
+
+---
+
+## List Customer's Saved Cards
+
+### `GET /v1/listCards`
+
+Retrieve saved cards for a customer. Useful for showing card-on-file before creating a session.
+
+### Authentication
+
+```
+Authorization: Bearer {MERCHANT_SECRET_KEY}
+```
+
+### Query Parameters
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `customer_id` | `string` | ✅ | The `user_id` you used when creating sessions for this customer |
+| `status` | `string` | | `"active"` (default) or `"all"` |
+| `include_card_art` | `string` | | `"true"` or `"false"` (default). Include card art URLs |
+
+### Success Response (200)
+
+```json
+{
+  "cards": [
+    {
+      "card_id": "card_01KKW...",
+      "card_last4": "1111",
+      "card_brand": "VISA",
+      "card_exp_month": 12,
+      "card_exp_year": 26,
+      "masked_card_number": "4111...1111",
+      "status": "active",
+      "created_at": "2026-04-16T..."
+    }
+  ],
+  "count": 1
+}
+```
+
+### cURL Example
+
+```bash
+curl "https://sandbox.api.prava.space/v1/listCards?customer_id=user_123" \
+  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY"
+```
+
+> **Tip:** Use `card_id` from this response in the `card.card_id` field when creating a session to pre-select a saved card.
 
 ---
 
@@ -344,7 +483,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
   -d '{
     "user_id": "user_123",
     "user_email": "user@example.com",
-    "amount": "49.99",
+    "total_amount": "49.99",
     "currency": "USD",
     "description": "Test purchase",
     "purchase_context": [
@@ -357,7 +496,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
         "product_details": [
           {
             "description": "Test Product",
-            "amount": "49.99",
+            "unit_price": "49.99",
             "quantity": 1
           }
         ]

@@ -1,6 +1,6 @@
 ---
 name: prava-sdk-integration
-version: 1.0.0
+version: 0.2.0
 
 description: Payment stack for AI agents — securely collect cards via PCI-compliant iframe, tokenize with Visa, protect transactions with passkeys (biometrics), and retrieve one-time payment credentials (network token + dynamic CVV) for agent-initiated purchases. No card details ever exposed to the AI.
 homepage: https://prava.space
@@ -18,7 +18,7 @@ tags:
 ---
 
 ```
-PRAVA SDK QUICK REFERENCE v1.0.0
+PRAVA SDK QUICK REFERENCE v0.2.0
 Package:  @prava-sdk/core
 Sandbox:  https://sandbox.api.prava.space
 Prod:     https://api.prava.space
@@ -29,10 +29,12 @@ Docs:     This file is canonical — skills guide + API ref + templates
 Capabilities: card enrollment + Visa tokenization + passkey (biometric) auth + one-time payment credentials (network token + dynamic CVV) for AI agent purchases
 
 Session lifecycle (server-side, secret key):
-  POST /v1/sessions                          → create session → returns session_id, session_token, iframe_url, order_id, expires_at
-  GET  /v1/sessions/{session_id}/payment-result → poll for credential → returns token (16-digit Visa network token), dynamic_cvv, expiry_month, expiry_year
-  POST /v1/sessions/{session_id}/revoke      → revoke active session
-  GET  /health                               → backend health check
+  POST /v1/sessions                                    → create session → returns session_id, session_token, iframe_url, order_id, expires_at
+  GET  /v1/sessions/{session_id}/payment-result        → poll for credential → returns transactions[].line_items[].token, dynamic_cvv, expiry_month, expiry_year
+  POST /v1/sessions/{session_id}/report-status         → report payment outcome (APPROVED/DECLINED) back to Visa
+  POST /v1/sessions/{session_id}/revoke                → revoke active session
+  GET  /v1/listCards?customer_id={id}                  → list a customer's saved cards (with secret key)
+  GET  /health                                         → backend health check
 
 Frontend SDK (publishable key):
   new PravaSDK({ publishableKey })           → create SDK instance
@@ -40,18 +42,18 @@ Frontend SDK (publishable key):
   prava.destroy()                            → cleanup iframe + listeners
 
 Session request shape (POST /v1/sessions):
-  { user_id, user_email, amount, currency, description?,
+  { user_id, user_email, total_amount, currency, description?, callback_url?,
     purchase_context: [{ merchant_details: { name, url, country_code_iso2, category_code?, category? },
-                         product_details: [{ description, amount, quantity? }],
+                         product_details: [{ description, unit_price, quantity? }],
                          effective_until_minutes? }] }
 
 Session response: { session_id, session_token, iframe_url, order_id, expires_at }
 
 Payment credential (GET /v1/sessions/{id}/payment-result, status=completed):
-  transactions[0].token         → Visa network token (16 digits, NOT real card number)
-  transactions[0].dynamic_cvv   → one-time CVV (3 digits, changes per txn)
-  transactions[0].expiry_month  → "12"
-  transactions[0].expiry_year   → "2027"
+  transactions[0].line_items[0].token         → Visa network token (16 digits, NOT real card number)
+  transactions[0].line_items[0].dynamic_cvv   → one-time CVV (3 digits, changes per txn)
+  transactions[0].line_items[0].expiry_month  → "12"
+  transactions[0].line_items[0].expiry_year   → "2027"
 
 Flows:
   First-time: create session → open iframe → user enters card → Visa tokenization → passkey registration → payment processed → poll credential
@@ -254,11 +256,11 @@ const res = await fetch(
   }
 );
 const data = await res.json();
-// data.status: "pending" | "completed" | "failed"
-// data.transactions[0].token         → Visa network token (16 digits)
-// data.transactions[0].dynamic_cvv   → one-time CVV (3 digits)
-// data.transactions[0].expiry_month  → "12"
-// data.transactions[0].expiry_year   → "2027"
+// data.status: "pending" | "awaiting_result" | "completed" | "failed"
+// data.transactions[0].line_items[0].token         → Visa network token (16 digits)
+// data.transactions[0].line_items[0].dynamic_cvv   → one-time CVV (3 digits)
+// data.transactions[0].line_items[0].expiry_month  → "12"
+// data.transactions[0].line_items[0].expiry_year   → "2027"
 ```
 
 > **Key details:**
@@ -288,11 +290,15 @@ const data = await res.json();
 | `user_email` | `string` | ✅ | Valid email | User's email address |
 | `user_phone` | `string` | | Min 1 char | User's phone number |
 | `user_country_code_iso2` | `string` | | 2 uppercase letters | ISO 3166-1 alpha-2 country code |
-| `amount` | `string` | ✅ | `^\d+(\.\d{1,2})?$` | Transaction amount (e.g., `"99.99"`) |
+| `total_amount` | `string` | ✅ | `^\d+(\.\d{1,2})?$` | Transaction total amount (e.g., `"99.99"`) |
 | `currency` | `string` | ✅ | 3 uppercase letters | ISO 4217 currency code (e.g., `"USD"`) |
 | `external_order_ref` | `string` | | Max 255 chars | Your internal order reference |
 | `description` | `string` | | | Order description |
+| `callback_url` | `string` | | HTTPS URL, max 2048 chars | Redirect URL after payment completion — user is sent here when transaction finishes |
 | `purchase_context` | `array` | ✅ | Min 1 entry | Purchase context (see below) |
+| `card` | `object` | | | Pre-select a saved card (skip card entry) |
+| `card.card_id` | `string` | | | ID of a previously saved card |
+| `card.vault_ref_id` | `string` | | Valid UUID | Merchant-provided encrypted card reference from Skyflow vault |
 
 **Purchase Context Entry:**
 
@@ -304,7 +310,8 @@ const data = await res.json();
 | `merchant_details.category_code` | `string` | | MCC code (max 10 chars) |
 | `merchant_details.category` | `string` | | Human-readable category (max 100 chars) |
 | `product_details[].description` | `string` | ✅ | Product description |
-| `product_details[].amount` | `string` | ✅ | Product amount |
+| `product_details[].unit_price` | `string` | ✅ | Product unit price |
+| `product_details[].product_id` | `string` | | Max 50 chars. Your internal product ID |
 | `product_details[].quantity` | `number` | | Default: 1 |
 | `effective_until_minutes` | `number` | | Default: 15 |
 
@@ -337,7 +344,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
   -d '{
     "user_id": "user_123",
     "user_email": "user@example.com",
-    "amount": "49.99",
+    "total_amount": "49.99",
     "currency": "USD",
     "description": "AI-assisted purchase",
     "purchase_context": [{
@@ -350,7 +357,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
       },
       "product_details": [{
         "description": "Premium Plan — Monthly",
-        "amount": "49.99",
+        "unit_price": "49.99",
         "quantity": 1
       }],
       "effective_until_minutes": 15
@@ -374,21 +381,42 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
   "transactions": [{
     "txn_id": "txn_01KKW...",
     "status": "completed",
-    "token": "4323126882557932",
-    "dynamic_cvv": "957",
-    "expiry_month": "12",
-    "expiry_year": "2027"
+    "line_items": [{
+      "txn_ref_id": "tli_01KKW...",
+      "merchant_name": "My AI App",
+      "merchant_url": "https://myapp.com",
+      "total_amount": "49.99",
+      "status": "completed",
+      "token": "4323126882557932",
+      "dynamic_cvv": "957",
+      "expiry_month": "12",
+      "expiry_year": "2027",
+      "products": [{
+        "product_ref_id": "ref_01KKW...",
+        "external_product_id": null,
+        "name": "Premium Plan — Monthly",
+        "unit_price": "49.99",
+        "quantity": 1
+      }]
+    }]
   }]
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `status` | `string` | `"pending"` → keep polling, `"completed"` → credential ready, `"failed"` → error |
-| `transactions[].token` | `string` | Visa network token (16 digits) — NOT the real card number |
-| `transactions[].dynamic_cvv` | `string` | One-time CVV (3 digits) — changes per transaction |
-| `transactions[].expiry_month` | `string` | Token expiry month (2-digit MM) |
-| `transactions[].expiry_year` | `string` | Token expiry year (4-digit YYYY) |
+| `status` | `string` | `"pending"` → keep polling, `"awaiting_result"` → credential being generated, `"completed"` → credential ready, `"failed"` → error |
+| `transactions[].txn_id` | `string` | Transaction identifier |
+| `transactions[].status` | `string` | `"pending"`, `"awaiting_result"`, `"completed"`, or `"failed"` |
+| `transactions[].line_items[]` | `array` | One entry per merchant in the purchase context |
+| `transactions[].line_items[].txn_ref_id` | `string` | Transaction line item ID — **needed for `report-status`** |
+| `transactions[].line_items[].merchant_name` | `string` | Merchant name from purchase context |
+| `transactions[].line_items[].total_amount` | `string` | Line item total amount |
+| `transactions[].line_items[].token` | `string \| null` | Visa network token (16 digits) — NOT the real card number |
+| `transactions[].line_items[].dynamic_cvv` | `string \| null` | One-time CVV (3 digits) — changes per transaction |
+| `transactions[].line_items[].expiry_month` | `string \| null` | Token expiry month (MM) |
+| `transactions[].line_items[].expiry_year` | `string \| null` | Token expiry year (YYYY) |
+| `transactions[].line_items[].products[]` | `array` | Products in this line item |
 | `transactions[].error` | `object?` | Present if failed: `{ code, message }` |
 
 **Polling pattern:** Call every 3 seconds. Timeout after ~90 seconds. Add `?_t=${Date.now()}` to bust Next.js cache.
@@ -407,6 +435,91 @@ curl -s "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../payment-resul
 > | Using `session_token` as Bearer auth | Use `MERCHANT_SECRET_KEY` (`sk_test_...`) |
 > | Calling `/v1/sessions/validate` | Use `/v1/sessions/{id}/payment-result` (validate is internal) |
 > | Expecting 2-digit expiry year | API returns 4-digit year (e.g., `"2027"`) |
+
+### `POST /v1/sessions/{session_id}/report-status` — Report Payment Outcome
+
+After your server processes the payment credential (network token + dynamic CVV), you **must** report the outcome back so Prava can relay it to Visa.
+
+**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}`
+
+**Request Body:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `txn_ref_id` | `string` | ✅ | Transaction line item ID from `payment-result` response (`line_items[].txn_ref_id`) |
+| `txn_status` | `string` | ✅ | `"APPROVED"` or `"DECLINED"` |
+| `txn_type` | `string` | | Default: `"PURCHASE"` |
+| `authorization_code` | `string` | | Max 128 chars. Auth code from your payment processor |
+| `response_code` | `string` | | Max 2 chars. Processor response code |
+| `amount_paid` | `string` | | Actual amount charged (if different from order amount) |
+| `product_statuses` | `array` | | Per-product status updates |
+| `product_statuses[].product_ref_id` | `string` | | Product ref ID from payment-result |
+| `product_statuses[].status` | `string` | | `"COMPLETED"`, `"FAILED"`, `"CANCELED"`, `"INPROGRESS"`, `"PENDING"`, `"ONHOLD"` |
+
+**Response (200):**
+
+```json
+{
+  "status": "confirmed",
+  "txn_ref_id": "tli_01KKW...",
+  "txn_status": "APPROVED",
+  "visa_confirmation": "SUCCESS"
+}
+```
+
+**cURL Example:**
+
+```bash
+curl -X POST "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../report-status" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
+  -d '{
+    "txn_ref_id": "tli_01KKW...",
+    "txn_status": "APPROVED",
+    "authorization_code": "AUTH123"
+  }'
+```
+
+### `GET /v1/listCards` — List Customer's Saved Cards
+
+Retrieve saved cards for a customer. Useful for showing card-on-file before creating a session.
+
+**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}`
+
+**Query Parameters:**
+
+| Param | Type | Required | Description |
+|-------|------|----------|-------------|
+| `customer_id` | `string` | ✅ | The `user_id` you used when creating sessions for this customer |
+| `status` | `string` | | `"active"` (default) or `"all"` |
+| `include_card_art` | `string` | | `"true"` or `"false"` (default). Include card art URLs |
+
+**Response (200):**
+
+```json
+{
+  "cards": [{
+    "card_id": "card_01KKW...",
+    "card_last4": "1111",
+    "card_brand": "VISA",
+    "card_exp_month": 12,
+    "card_exp_year": 26,
+    "masked_card_number": "4111...1111",
+    "status": "active",
+    "created_at": "2026-04-16T..."
+  }],
+  "count": 1
+}
+```
+
+**cURL Example:**
+
+```bash
+curl "https://sandbox.api.prava.space/v1/listCards?customer_id=user_123" \
+  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY"
+```
+
+> **Tip:** Use `card_id` from this response in the `card.card_id` field when creating a session to pre-select a saved card.
 
 ### `POST /v1/sessions/{session_id}/revoke` — Revoke Session
 
@@ -545,25 +658,21 @@ const styles: CardFormStyles = {
 |-------|---------|-------------|
 | `PRAVA_READY` | — | Iframe loaded and ready |
 | `PRAVA_CHANGE` | `CardValidationState` | Validation changed |
-| `PRAVA_SUCCESS` | `CollectPANResult` | Card enrolled |
 | `PRAVA_ERROR` | `PravaError` | Error occurred |
 | `PRAVA_RESIZE` | `{ height }` | Iframe requests height change |
 | `PRAVA_ENROLLMENT_COMPLETE` | Enrollment data | Full enrollment completed |
 | `PRAVA_SAVED_CARDS_LOADED` | Cards list | Saved cards loaded (repeat flow) |
-| `PRAVA_PASSKEY_VERIFY_REQUIRED` | Passkey data | Passkey verification needed |
-| `PRAVA_TRANSACTION_COMPLETE` | Transaction data | Payment completed |
 | `PRAVA_TRANSACTION_CREATED` | Transaction data | Transaction created |
+| `PRAVA_TRANSACTION_COMPLETE` | `{ callback_url?: string }` | Payment completed. If `callback_url` present, SDK keeps bridge alive for redirect |
+| `PRAVA_REDIRECT` | `{ url: string }` | Iframe requests redirect to merchant callback URL — SDK navigates via `window.location.href` |
 
 **SDK → Iframe:**
 
 | Command | Description |
 |---------|-------------|
-| `PRAVA_INIT` | Initialize with publishableKey + styles |
-| `PRAVA_SUBMIT` | Trigger form submission |
-| `PRAVA_FOCUS` | Focus a specific field |
-| `PRAVA_CLEAR` | Clear form fields |
-| `PRAVA_PASSKEY_VERIFY_COMPLETE` | Passkey verification result |
-| `PRAVA_PASSKEY_VERIFY_FAILED` | Passkey verification failed |
+| `PRAVA_INIT` | Initialize iframe with publishableKey + styles |
+| `PRAVA_PASSKEY_VERIFY_COMPLETE` | Send passkey verification result (assuranceData) to iframe |
+| `PRAVA_PASSKEY_VERIFY_FAILED` | Notify iframe that passkey verification failed |
 
 ### Iframe Security
 
@@ -642,29 +751,46 @@ export interface SessionResponse {
   order_id: string;
 }
 
-export interface PaymentTransaction {
-  txn_id: string;
-  status: 'completed' | 'failed' | string;
+export interface PaymentLineItem {
+  txn_ref_id: string;
+  merchant_name: string;
+  merchant_url: string;
+  total_amount: string;
+  status: string;
   token: string | null;
   dynamic_cvv: string | null;
   expiry_month: string | null;
   expiry_year: string | null;
+  products: Array<{
+    product_ref_id: string;
+    external_product_id: string | null;
+    name: string;
+    unit_price: string;
+    quantity: number;
+  }>;
+}
+
+export interface PaymentTransaction {
+  txn_id: string;
+  status: 'pending' | 'awaiting_result' | 'completed' | 'failed' | string;
+  line_items: PaymentLineItem[];
   error?: { code: string; message: string };
 }
 
 export interface PaymentResultResponse {
   session_id: string;
   order_id: string | null;
-  status: 'pending' | 'completed' | 'failed' | string;
+  status: 'pending' | 'awaiting_result' | 'completed' | 'failed' | string;
   transactions: PaymentTransaction[];
 }
 
 interface CreateSessionParams {
   userId: string;
   userEmail: string;
-  amount?: string;
+  totalAmount?: string;
   currency?: string;
   description?: string;
+  callbackUrl?: string;
   purchaseContext?: Array<{
     merchant_details: {
       name: string;
@@ -675,7 +801,7 @@ interface CreateSessionParams {
     };
     product_details: Array<{
       description: string;
-      amount: string;
+      unit_price: string;
       quantity?: number;
     }>;
     effective_until_minutes?: number;
@@ -683,7 +809,7 @@ interface CreateSessionParams {
 }
 
 export async function createPravaSession({
-  userId, userEmail, amount = '99.99', currency = 'USD', description, purchaseContext,
+  userId, userEmail, totalAmount = '99.99', currency = 'USD', description, callbackUrl, purchaseContext,
 }: CreateSessionParams): Promise<SessionResponse> {
   if (!MERCHANT_SECRET_KEY || MERCHANT_SECRET_KEY.includes('YOUR_SECRET_KEY')) {
     throw new Error(
@@ -701,9 +827,10 @@ export async function createPravaSession({
     body: JSON.stringify({
       user_id: userId,
       user_email: userEmail,
-      amount,
+      total_amount: totalAmount,
       currency,
       description: description || 'Purchase',
+      ...(callbackUrl && { callback_url: callbackUrl }),
       purchase_context: purchaseContext || [{
         merchant_details: {
           name: 'My AI App',                  // ← Replace with your app name
@@ -714,7 +841,7 @@ export async function createPravaSession({
         },
         product_details: [{
           description: 'Purchase',
-          amount: amount,
+          unit_price: totalAmount,
           quantity: 1,
         }],
         effective_until_minutes: 15,
@@ -919,7 +1046,8 @@ export default function CheckoutPage() {
   const isCardEntry = !!session && !paymentResult;
   const isCompleted = paymentResult?.status === 'completed';
   const isFailed = paymentResult?.status === 'failed';
-  const completedTxn: PaymentTransaction | null = isCompleted ? paymentResult.transactions[0] ?? null : null;
+  const completedTxn = isCompleted ? paymentResult.transactions[0] ?? null : null;
+  const completedLineItem = completedTxn?.line_items?.[0] ?? null;
 
   const stopPolling = useCallback(() => {
     if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
@@ -944,11 +1072,11 @@ export default function CheckoutPage() {
   const handleCheckout = async () => {
     setLoading(true); setError(null); setPaymentResult(null);
     try {
-      // ADAPT: Get userId/userEmail from your auth system, amount from your cart/product
+      // ADAPT: Get userId/userEmail from your auth system, totalAmount from your cart/product
       const s = await createPravaSession({
         userId: 'user_123',            // ← Replace with your auth context
         userEmail: 'user@example.com', // ← Replace with your auth context
-        amount: '49.99',               // ← Replace with your product/cart
+        totalAmount: '49.99',          // ← Replace with your product/cart
         currency: 'USD',
       });
       setSession(s);
@@ -982,12 +1110,12 @@ export default function CheckoutPage() {
         </div>
       )}
 
-      {isCompleted && completedTxn && (
+      {isCompleted && completedLineItem && (
         <div>
           <h2>Payment Complete</h2>
-          <p>Network Token: {completedTxn.token}</p>
-          <p>Dynamic CVV: {completedTxn.dynamic_cvv}</p>
-          <p>Expiry: {completedTxn.expiry_month}/{completedTxn.expiry_year}</p>
+          <p>Network Token: {completedLineItem.token}</p>
+          <p>Dynamic CVV: {completedLineItem.dynamic_cvv}</p>
+          <p>Expiry: {completedLineItem.expiry_month}/{completedLineItem.expiry_year}</p>
           <button onClick={handleReset}>New Checkout</button>
         </div>
       )}
@@ -1020,7 +1148,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
       return res.status(500).json({ error: 'MERCHANT_SECRET_KEY not configured.' });
     }
 
-    const { userId, userEmail, amount = '99.99', currency = 'USD', description } = req.body;
+    const { userId, userEmail, totalAmount = '99.99', currency = 'USD', description } = req.body;
     if (!userId || !userEmail) {
       return res.status(400).json({ error: 'userId and userEmail are required' });
     }
@@ -1034,7 +1162,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
       body: JSON.stringify({
         user_id: userId,
         user_email: userEmail,
-        amount,
+        total_amount: totalAmount,
         currency,
         description: description || 'Purchase',
         purchase_context: [{
@@ -1045,7 +1173,7 @@ router.post('/create-session', async (req: Request, res: Response) => {
             category_code: '5734',
             category: 'Software Services',
           },
-          product_details: [{ description: description || 'Purchase', amount, quantity: 1 }],
+          product_details: [{ description: description || 'Purchase', unit_price: totalAmount, quantity: 1 }],
           effective_until_minutes: 15,
         }],
       }),
@@ -1145,10 +1273,10 @@ export default router;
           },
           body: JSON.stringify({
             user_id: 'demo_user', user_email: 'demo@example.com',
-            amount: '49.99', currency: 'USD', description: 'Demo checkout',
+            total_amount: '49.99', currency: 'USD', description: 'Demo checkout',
             purchase_context: [{
               merchant_details: { name: 'Demo Store', url: 'https://example.com', country_code_iso2: 'US' },
-              product_details: [{ description: 'Test Product', amount: '49.99', quantity: 1 }],
+              product_details: [{ description: 'Test Product', unit_price: '49.99', quantity: 1 }],
             }],
           }),
         });
