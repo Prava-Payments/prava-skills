@@ -5,7 +5,7 @@ Link this agent to a Prava account. One-time operation.
 ## Installation
 
 ```bash
-npm install -g @prava/cli
+npm install -g @prava-sdk/cli
 ```
 
 ## Command

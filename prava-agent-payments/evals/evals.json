@@ -8,7 +8,7 @@
       "files": [],
       "expectations": [
         "Plan checks if prava CLI is installed (which prava or prava --version)",
-        "Plan installs CLI if not found (npm install -g @prava/cli)",
+        "Plan installs CLI if not found (npm install -g @prava-sdk/cli)",
         "Plan runs 'prava status' to check agent link state before any payment command",
         "Plan runs 'prava setup --name <name>' since this is a first-time user",
         "Plan shows the approval URL to the user and waits for approval",
@@ -42,7 +42,7 @@
       "files": [],
       "expectations": [
         "Plan checks if prava CLI is installed (which prava or prava --version)",
-        "Plan installs CLI if not found (npm install -g @prava/cli)",
+        "Plan installs CLI if not found (npm install -g @prava-sdk/cli)",
         "Plan runs 'prava status' to check if already linked",
         "Plan runs 'prava setup --name <name>' if not configured",
         "Plan shows approval URL to user and waits for confirmation",
@@ -137,7 +137,7 @@
       "files": [],
       "expectations": [
         "Plan identifies this as a CLI major version mismatch error",
-        "Plan instructs user to run 'npm update -g @prava/cli' to update the CLI",
+        "Plan instructs user to run 'npm update -g @prava-sdk/cli' to update the CLI",
         "Plan does NOT attempt to run 'prava sessions create' or 'prava setup' before the update",
         "Plan suggests retrying the original command after the update completes"
       ]

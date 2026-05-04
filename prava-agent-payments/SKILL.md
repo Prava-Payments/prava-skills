@@ -6,7 +6,7 @@ description: Payment collection for AI agents — install CLI, link to user's Pr
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
-metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"","requires":{"env":[],"npm":["@prava/cli"]}}}
+metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"","requires":{"env":[],"npm":["@prava-sdk/cli"]}}}
 tags:
   - payments
   - ai-agents
@@ -40,13 +40,13 @@ which prava
 If not found, install it:
 
 ```bash
-npm install -g @prava/cli
+npm install -g @prava-sdk/cli
 ```
 
 If the install fails due to permissions, try:
 
 ```bash
-sudo npm install -g @prava/cli
+sudo npm install -g @prava-sdk/cli
 ```
 
 After install, verify:
@@ -149,7 +149,7 @@ prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<na
 - Minor/patch mismatch: warning printed, continues working
 - Major version mismatch: CLI blocks and exits with code 1
 
-If you see a version error, run: `npm update -g @prava/cli`
+If you see a version error, run: `npm update -g @prava-sdk/cli`
 
 ## Anti-Patterns
 

@@ -114,14 +114,14 @@ export class PravaClient {
       if (requiredMajor > currentMajor) {
         console.error(
           `\nCritical update required. Current: ${this.cliVersion}, Required: ${minVersion}` +
-          `\nRun: npm update -g @prava/cli\n`,
+          `\nRun: npm update -g @prava-sdk/cli\n`,
         );
         process.exit(1);
       }
 
       // Minor/patch — warn but continue
       console.warn(
-        `\nUpdate available: npm update -g @prava/cli (current: ${this.cliVersion}, latest: ${minVersion})\n`,
+        `\nUpdate available: npm update -g @prava-sdk/cli (current: ${this.cliVersion}, latest: ${minVersion})\n`,
       );
     }
   }

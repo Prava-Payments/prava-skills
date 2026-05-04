@@ -9,7 +9,7 @@
 | Core Backend | `api.prava.space` | `prava-core-monorepo` | Agent APIs, session management, Visa tokenization |
 | Wallet UI | `wallet.prava.space` | `prava-wallet-dashboard/wallet-ui` | User-facing dashboard, agent approval page |
 | Wallet Backend | `wallet.prava.space/api` | `prava-wallet-dashboard/wallet-backend` | Wallet API, proxies approval to core backend |
-| CLI | npm `@prava/cli` | `prava-skills/src` | Agent-side tool, installed globally |
+| CLI | npm `@prava-sdk/cli` | `prava-skills/src` | Agent-side tool, installed globally |
 | Skill | `npx skills add ...` | `prava-skills/prava-sdk-integration` | Instructions that teach AI agents the integration flow |
 
 ## How an Agent Gets Set Up
@@ -29,10 +29,10 @@ This makes the `prava-sdk-integration` skill available. When the agent encounter
 The skill tells the agent to check if the CLI exists before anything else:
 
 ```bash
-which prava || npm install -g @prava/cli
+which prava || npm install -g @prava-sdk/cli
 ```
 
-If not installed, the agent runs `npm install -g @prava/cli` (public npm package under `@prava` org).
+If not installed, the agent runs `npm install -g @prava-sdk/cli` (public npm package under `@prava` org).
 
 ### Step 2: Agent linking (`prava setup`)
 
@@ -138,7 +138,7 @@ The core backend returns `X-Min-CLI-Version` header on every response (Fastify `
 
 - Configured via `MIN_CLI_VERSION` env var on backend (default: `0.0.1`)
 - CLI compares against its own version from `package.json`
-- Major version mismatch → hard block, `process.exit(1)`, forces `npm update -g @prava/cli`
+- Major version mismatch → hard block, `process.exit(1)`, forces `npm update -g @prava-sdk/cli`
 - Minor/patch mismatch → warning, continues working
 
 This is the server-side kill switch for deprecating old CLI versions.

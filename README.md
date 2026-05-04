@@ -42,7 +42,7 @@ prava-sdk-integration/             # Skill for merchants (SDK-based)
     ├── express/                   # Express.js templates
     └── vanilla/                   # Vanilla JS template
 
-src/                               # CLI source code (@prava/cli)
+src/                               # CLI source code (@prava-sdk/cli)
 ```
 
 ## How to Use
@@ -68,7 +68,7 @@ npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-sdk-
 ### Install CLI (for Agent Payment Collection)
 
 ```bash
-npm install -g @prava/cli
+npm install -g @prava-sdk/cli
 ```
 
 Then ask your AI agent to "buy something" or "pay with Prava". The agent skill guides agent linking and the full payment flow.
