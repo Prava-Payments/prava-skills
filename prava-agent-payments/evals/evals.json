@@ -1,0 +1,173 @@
+{
+  "skill_name": "prava-agent-payments",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I want to buy a latte and a croissant from Blue Bottle Coffee. The latte is $5.00 and the croissant is $3.50. Their website is https://bluebottlecoffee.com and they're based in the US. This is my first time using Prava.",
+      "expected_output": "A plan that includes: check if prava CLI is installed; install if missing; run prava status; since first-time, run prava setup with agent name; show approval URL; after approval, immediately run prava sessions create with total 8.50, USD, both products, and merchant details; immediately use returned credentials to complete checkout via browser automation.",
+      "files": [],
+      "expectations": [
+        "Plan checks if prava CLI is installed (which prava or prava --version)",
+        "Plan installs CLI if not found (npm install -g @prava/cli)",
+        "Plan runs 'prava status' to check agent link state before any payment command",
+        "Plan runs 'prava setup --name <name>' since this is a first-time user",
+        "Plan shows the approval URL to the user and waits for approval",
+        "Plan proceeds to payment immediately after setup completes (does not stop to ask user)",
+        "Plan uses 'prava sessions create' with --total-amount '8.50' --currency USD",
+        "Plan includes --merchant-name 'Blue Bottle Coffee' and --merchant-url 'https://bluebottlecoffee.com' and --merchant-country US (2-char code, not 'USA')",
+        "Plan includes two separate --product flags with correct descriptions and unit_price as strings",
+        "Plan immediately uses returned Token, Cryptogram, and Expiry to complete checkout at the merchant (no pause between receiving credentials and checkout)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Pay for my AWS bill. The total is $127.43 USD. AWS website is https://aws.amazon.com, US-based.",
+      "expected_output": "A plan that includes: check CLI; run prava status; branch on status (active/pending/not configured); create session with total 127.43, merchant AWS, single product; immediately use credentials for checkout.",
+      "files": [],
+      "expectations": [
+        "Plan checks if prava CLI is installed",
+        "Plan runs 'prava status' as the first prava command",
+        "Plan branches on status result: active → proceed, pending → remind user to approve, not configured → run setup",
+        "Plan uses 'prava sessions create' with --total-amount '127.43' --currency USD",
+        "Plan includes --merchant-name containing 'AWS' and --merchant-url containing 'aws.amazon.com' and --merchant-country US",
+        "Plan includes at least one --product flag with description and unit_price matching the total",
+        "Plan does NOT guess or hallucinate product details beyond what user provided",
+        "Plan immediately uses returned credentials to complete checkout (no pause)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Set up Prava on my machine so I can make purchases later.",
+      "expected_output": "A plan that includes: check CLI installed; install if needed; run prava status; run prava setup with agent name if not configured; show URL and wait; confirm complete. Should NOT create a payment session.",
+      "files": [],
+      "expectations": [
+        "Plan checks if prava CLI is installed (which prava or prava --version)",
+        "Plan installs CLI if not found (npm install -g @prava/cli)",
+        "Plan runs 'prava status' to check if already linked",
+        "Plan runs 'prava setup --name <name>' if not configured",
+        "Plan shows approval URL to user and waits for confirmation",
+        "Plan does NOT run 'prava sessions create' (user only asked for setup, not a purchase)",
+        "Plan confirms setup is complete after approval"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Buy me a hoodie from Nike. I think they're around $65.",
+      "expected_output": "Agent should NOT immediately call prava sessions create. Must first discover the exact product, price, and merchant URL. Only after confirming real details with user should it proceed to payment.",
+      "files": [],
+      "expectations": [
+        "Plan does NOT call 'prava sessions create' immediately with guessed values",
+        "Plan identifies that the price is approximate ('I think', 'around') and needs confirmation",
+        "Plan includes a discovery step: browsing Nike's website to find the actual product and real price",
+        "Plan confirms the exact product, price, and merchant URL with the user before creating a session",
+        "Plan uses --merchant-url with a real Nike URL (e.g., https://nike.com or https://www.nike.com), not a guessed path",
+        "Plan does NOT hallucinate a specific product name, SKU, or exact price without discovering it first"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "I need to buy three things: a book from Amazon ($15.99), a domain from Namecheap ($12.98), and a coffee subscription from Blue Bottle ($18/month). All USD, all US companies.",
+      "expected_output": "Agent should recognize these are THREE separate merchants requiring THREE separate payment sessions. Cannot bundle cross-merchant products into one session.",
+      "files": [],
+      "expectations": [
+        "Plan recognizes that three different merchants require three separate 'prava sessions create' calls",
+        "Plan does NOT attempt to bundle all three products into a single session",
+        "Plan creates separate sessions for Amazon (total 15.99), Namecheap (total 12.98), and Blue Bottle (total 18.00)",
+        "Each session has the correct --merchant-name, --merchant-url, and --merchant-country for that merchant",
+        "Plan handles each session sequentially — waits for credentials from one before starting the next",
+        "Plan immediately uses credentials after each session to complete that merchant's checkout before starting the next"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Pay $50 to my friend John for dinner last night.",
+      "expected_output": "Agent should recognize this is a peer-to-peer transfer, NOT a merchant purchase. Prava is for merchant payments with tokenized card credentials. Agent should decline or explain this is not supported.",
+      "files": [],
+      "expectations": [
+        "Plan does NOT attempt to run 'prava sessions create' for a person-to-person payment",
+        "Plan recognizes Prava is for merchant card payments, not P2P transfers",
+        "Plan explains that Prava collects tokenized card credentials for merchant checkouts, not for sending money to individuals",
+        "Plan may suggest alternatives (Venmo, PayPal, etc.) but does NOT misuse the Prava CLI"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Buy me a laptop from Best Buy for 999 dollars, their site is bestbuy.com, they're American.",
+      "expected_output": "Agent should use correct formats: amount as string '999.00' (not 999), currency as ISO code USD, country as 2-char 'US' (not 'American'), URL with https:// prefix.",
+      "files": [],
+      "expectations": [
+        "Plan uses --total-amount '999.00' or '999' as a string, not a bare number",
+        "Plan uses --currency USD (ISO 4217 code), not 'dollars' or 'usd'",
+        "Plan uses --merchant-country US (ISO 3166-1 alpha-2), not 'American' or 'USA' or 'United States'",
+        "Plan uses --merchant-url 'https://bestbuy.com' or 'https://www.bestbuy.com' (includes https:// prefix), not bare 'bestbuy.com'",
+        "Plan includes at least one --product flag with description and unit_price for the laptop"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "I want to buy something online but I'm not sure what yet. Can you set up Prava and then help me find something?",
+      "expected_output": "Agent should separate the setup from the purchase. Run setup now, confirm it's done, then help user browse/discover products. Should NOT create a payment session until a product is chosen.",
+      "files": [],
+      "expectations": [
+        "Plan checks CLI installation and runs 'prava setup' if needed",
+        "Plan completes setup flow (show URL, wait for approval)",
+        "Plan does NOT run 'prava sessions create' since no product has been chosen",
+        "Plan transitions to helping the user discover/browse products after setup is complete",
+        "Plan waits until user has decided on a specific product before starting the payment flow"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Buy me 2 large pizzas ($14.99 each) and a 2-liter Coke ($3.49) from Domino's. Total should be $33.47. dominos.com, US.",
+      "expected_output": "Agent should use the correct total, include quantity in product JSON, and ensure the math adds up (2 × 14.99 + 3.49 = 33.47).",
+      "files": [],
+      "expectations": [
+        "Plan uses --total-amount '33.47'",
+        "Plan includes --product with quantity 2 for the pizzas (not two separate identical product flags)",
+        "Plan includes --product with quantity 1 for the Coke",
+        "The sum of (unit_price × quantity) across all products equals the total-amount",
+        "Plan uses --merchant-name 'Domino's' or 'Dominos' and --merchant-url containing 'dominos.com'",
+        "Plan uses --currency USD and --merchant-country US"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "I got an error: 'Critical update required. Current: 0.0.1, Required: 1.0.0'. What do I do?",
+      "expected_output": "Agent should recognize this is a CLI version error and guide the user to update, not try to create a session or re-run setup.",
+      "files": [],
+      "expectations": [
+        "Plan identifies this as a CLI major version mismatch error",
+        "Plan instructs user to run 'npm update -g @prava/cli' to update the CLI",
+        "Plan does NOT attempt to run 'prava sessions create' or 'prava setup' before the update",
+        "Plan suggests retrying the original command after the update completes"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Buy me a mass gainer from https://www.myprotein.co.in/sports-nutrition/impact-weight-gainer/10529600.html, it costs ₹2,499. I'm in India.",
+      "expected_output": "Agent handles non-US merchant correctly: currency INR, country IN, Indian URL, price without currency symbol or commas.",
+      "files": [],
+      "expectations": [
+        "Plan uses --currency INR (not 'rupees' or '₹')",
+        "Plan uses --merchant-country IN (not 'India' or 'IND')",
+        "Plan uses --total-amount '2499' or '2499.00' (no comma, no ₹ symbol)",
+        "Plan uses --merchant-url 'https://www.myprotein.co.in' or the full product URL",
+        "Plan includes --merchant-name 'Myprotein' or similar",
+        "Plan includes --product with description of the mass gainer and unit_price '2499' or '2499.00'"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "prava status says 'pending'. I already approved it 5 minutes ago in my browser. What's wrong?",
+      "expected_output": "Agent should troubleshoot: suggest running setup again (re-polls), check if the right URL was opened, check network connectivity. Should NOT create a new setup or overwrite existing keys.",
+      "files": [],
+      "expectations": [
+        "Plan does NOT run 'prava setup' again (would generate new keys and break the existing link attempt)",
+        "Plan suggests the user verify they opened the correct approval URL",
+        "Plan suggests checking network connectivity (server might be unreachable)",
+        "Plan mentions that 'prava sessions create' has auto-link-check and may detect the approval",
+        "Plan does NOT tell the user to delete ~/.prava/agent.json as a first step"
+      ]
+    }
+  ]
+}

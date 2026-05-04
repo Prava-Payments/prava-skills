@@ -1,75 +1,28 @@
 ---
 name: prava-sdk-integration
-version: 0.2.0
+version: 0.4.0
 
-description: Payment stack for AI agents — securely collect cards via PCI-compliant iframe, tokenize with Visa, protect transactions with passkeys (biometrics), and retrieve one-time payment credentials (network token + dynamic CVV) for agent-initiated purchases. No card details ever exposed to the AI.
+description: Integrate Prava's payment SDK into web applications — securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey (biometric) verification, and poll for one-time payment credentials (network token + dynamic CVV). For merchant/developer integration, not for AI agent CLI usage.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
-metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"MERCHANT_SECRET_KEY","requires":{"env":["MERCHANT_SECRET_KEY","PUBLISHABLE_KEY"],"npm":["@prava-sdk/core"]}}}
+metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"MERCHANT_SECRET_KEY","requires":{"env":[],"npm":["@prava-sdk/core"]}}}
 tags:
   - payments
-  - ai-agents
+  - sdk
   - card-enrollment
   - pci-compliant
   - passkey
   - visa
   - tokenization
+  - merchant
 ---
 
-```
-PRAVA SDK QUICK REFERENCE v0.2.0
-Package:  @prava-sdk/core
-Sandbox:  https://sandbox.api.prava.space
-Prod:     https://api.prava.space
-Auth:     Authorization: Bearer <MERCHANT_SECRET_KEY>  (server-side ONLY)
-Frontend: PravaSDK({ publishableKey: "pk_test_xxx" })  (client-side safe)
-Docs:     This file is canonical — skills guide + API ref + templates
+# Prava SDK Integration — Merchant Guide
 
-Capabilities: card enrollment + Visa tokenization + passkey (biometric) auth + one-time payment credentials (network token + dynamic CVV) for AI agent purchases
+This skill teaches AI coding agents how to integrate Prava payments into any web application using the `@prava-sdk/core` npm package and Prava REST API.
 
-Session lifecycle (server-side, secret key):
-  POST /v1/sessions                                    → create session → returns session_id, session_token, iframe_url, order_id, expires_at
-  GET  /v1/sessions/{session_id}/payment-result        → poll for credential → returns transactions[].line_items[].token, dynamic_cvv, expiry_month, expiry_year
-  POST /v1/sessions/{session_id}/report-status         → report payment outcome (APPROVED/DECLINED) back to Visa
-  POST /v1/sessions/{session_id}/revoke                → revoke active session
-  GET  /v1/listCards?customer_id={id}                  → list a customer's saved cards (with secret key)
-  GET  /health                                         → backend health check
-
-Frontend SDK (publishable key):
-  new PravaSDK({ publishableKey })           → create SDK instance
-  prava.collectPAN({ sessionToken, iframeUrl, container, onReady, onChange, onSuccess, onError }) → mount secure iframe
-  prava.destroy()                            → cleanup iframe + listeners
-
-Session request shape (POST /v1/sessions):
-  { user_id, user_email, total_amount, currency, description?, callback_url?,
-    purchase_context: [{ merchant_details: { name, url, country_code_iso2, category_code?, category? },
-                         product_details: [{ description, unit_price, quantity? }],
-                         effective_until_minutes? }] }
-
-Session response: { session_id, session_token, iframe_url, order_id, expires_at }
-
-Payment credential (GET /v1/sessions/{id}/payment-result, status=completed):
-  transactions[0].line_items[0].token         → Visa network token (16 digits, NOT real card number)
-  transactions[0].line_items[0].dynamic_cvv   → one-time CVV (3 digits, changes per txn)
-  transactions[0].line_items[0].expiry_month  → "12"
-  transactions[0].line_items[0].expiry_year   → "2027"
-
-Flows:
-  First-time: create session → open iframe → user enters card → Visa tokenization → passkey registration → payment processed → poll credential
-  Repeat:     create session → open iframe → user picks saved card → passkey verification → payment processed → poll credential
-
-Rules:
-  - MERCHANT_SECRET_KEY (sk_test_/sk_live_) → server-side ONLY, never in client bundles
-  - publishableKey (pk_test_/pk_live_) → client-side safe
-  - Poll payment-result with session_id (NOT session_token) + secret key (NOT session_token)
-  - Sessions expire in ~15 minutes, are single-use
-  - Raw card data NEVER leaves the PCI-compliant iframe
-```
-
-# Prava SDK Integration — Agent Skills Guide
-
-This skill is **doc + templates**. It teaches AI coding agents how to integrate Prava into any web application. All capabilities are exposed via the Prava REST API (server-side) and the `@prava-sdk/core` npm package (client-side).
+> **Looking for the AI agent CLI flow?** That's a separate skill: `prava-agent-payments`. This skill is for merchants integrating Prava into their web apps.
 
 ---
 
@@ -77,7 +30,7 @@ This skill is **doc + templates**. It teaches AI coding agents how to integrate 
 
 Activate this skill when the user wants to:
 - Integrate Prava payments into their app
-- Add card enrollment / card collection to an AI agent
+- Add card enrollment / card collection to a web application
 - Set up `@prava-sdk/core`
 - Create a payment flow for an AI app
 - Enable tokenized card payments with passkey verification
@@ -201,11 +154,11 @@ PRAVA_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 
 **Other frameworks** — use the appropriate env prefix (`VITE_`, `REACT_APP_`, etc.) for client-side variables.
 
-> ⚠️ **CRITICAL SECURITY RULE**: `MERCHANT_SECRET_KEY` must ONLY be used server-side. NEVER expose it in client-side code, environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`, or browser-accessible bundles.
+> **CRITICAL SECURITY RULE**: `MERCHANT_SECRET_KEY` must ONLY be used server-side. NEVER expose it in client-side code, environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`, or browser-accessible bundles.
 
 ### Step 4: Create Server-Side Session Endpoint
 
-The server must call Prava's backend to create a session. This is where the secret key is used. See the **Session API Reference** section below for the full request/response schema, and the **Templates** section for framework-specific code.
+The server must call Prava's backend to create a session. This is where the secret key is used. See the **Session API Reference** (`references/session-api-reference.md`) for the full request/response schema, and the **Templates** section for framework-specific code.
 
 ### Step 5: Create Frontend Integration
 
@@ -273,424 +226,6 @@ const data = await res.json();
 ### Step 7: Provide Test Data
 
 **Network test cards are provided by the Prava team.** Reach out to your Prava account manager during onboarding to receive sandbox test card details. Once received, the test card will include a 16-digit card number, a future expiry date (e.g., `12/28`), and a 3-digit CVV.
-
----
-
-## Session API Reference
-
-### `POST /v1/sessions` — Create Session
-
-**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}`
-
-**Request Body:**
-
-| Field | Type | Required | Validation | Description |
-|-------|------|----------|------------|-------------|
-| `user_id` | `string` | ✅ | 1-255 chars | Your app's unique user identifier |
-| `user_email` | `string` | ✅ | Valid email | User's email address |
-| `user_phone` | `string` | | Min 1 char | User's phone number |
-| `user_country_code_iso2` | `string` | | 2 uppercase letters | ISO 3166-1 alpha-2 country code |
-| `total_amount` | `string` | ✅ | `^\d+(\.\d{1,2})?$` | Transaction total amount (e.g., `"99.99"`) |
-| `currency` | `string` | ✅ | 3 uppercase letters | ISO 4217 currency code (e.g., `"USD"`) |
-| `external_order_ref` | `string` | | Max 255 chars | Your internal order reference |
-| `description` | `string` | | | Order description |
-| `callback_url` | `string` | | HTTPS URL, max 2048 chars | Redirect URL after payment completion — user is sent here when transaction finishes |
-| `purchase_context` | `array` | ✅ | Min 1 entry | Purchase context (see below) |
-| `card` | `object` | | | Pre-select a saved card (skip card entry) |
-| `card.card_id` | `string` | | | ID of a previously saved card |
-| `card.vault_ref_id` | `string` | | Valid UUID | Merchant-provided encrypted card reference from Skyflow vault |
-
-**Purchase Context Entry:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `merchant_details.name` | `string` | ✅ | Merchant/app name |
-| `merchant_details.url` | `string` | ✅ | Merchant website URL |
-| `merchant_details.country_code_iso2` | `string` | ✅ | 2 uppercase letters (ISO 3166-1 alpha-2) |
-| `merchant_details.category_code` | `string` | | MCC code (max 10 chars) |
-| `merchant_details.category` | `string` | | Human-readable category (max 100 chars) |
-| `product_details[].description` | `string` | ✅ | Product description |
-| `product_details[].unit_price` | `string` | ✅ | Product unit price |
-| `product_details[].product_id` | `string` | | Max 50 chars. Your internal product ID |
-| `product_details[].quantity` | `number` | | Default: 1 |
-| `effective_until_minutes` | `number` | | Default: 15 |
-
-**Response (201 Created):**
-
-```json
-{
-  "session_id": "sess_01KKW...",
-  "session_token": "eyJhbGciOiJIUzI1NiIs...",
-  "iframe_url": "https://sandbox.collect.prava.space?session=eyJ...",
-  "order_id": "ord_01KKW...",
-  "expires_at": "2026-03-16T15:30:00.000Z"
-}
-```
-
-| Field | Description |
-|-------|-------------|
-| `session_id` | Unique session ID — **required for polling payment result** |
-| `session_token` | JWT token — pass to frontend SDK |
-| `iframe_url` | PCI-compliant card enrollment page URL |
-| `order_id` | Order tracking ID |
-| `expires_at` | ISO 8601 expiration (~15 min) |
-
-**cURL Example:**
-
-```bash
-curl -X POST https://sandbox.api.prava.space/v1/sessions \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
-  -d '{
-    "user_id": "user_123",
-    "user_email": "user@example.com",
-    "total_amount": "49.99",
-    "currency": "USD",
-    "description": "AI-assisted purchase",
-    "purchase_context": [{
-      "merchant_details": {
-        "name": "My AI App",
-        "url": "https://myapp.com",
-        "country_code_iso2": "US",
-        "category_code": "5734",
-        "category": "Software Services"
-      },
-      "product_details": [{
-        "description": "Premium Plan — Monthly",
-        "unit_price": "49.99",
-        "quantity": 1
-      }],
-      "effective_until_minutes": 15
-    }]
-  }'
-```
-
-### `GET /v1/sessions/{session_id}/payment-result` — Poll for Credential
-
-**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}` (NOT session_token)
-
-**Path:** Use `session_id` (e.g., `sess_01KKW...`), NOT `session_token`.
-
-**Response (200):**
-
-```json
-{
-  "session_id": "sess_01KKW...",
-  "order_id": "ord_01KKW...",
-  "status": "completed",
-  "transactions": [{
-    "txn_id": "txn_01KKW...",
-    "status": "completed",
-    "line_items": [{
-      "txn_ref_id": "tli_01KKW...",
-      "merchant_name": "My AI App",
-      "merchant_url": "https://myapp.com",
-      "total_amount": "49.99",
-      "status": "completed",
-      "token": "4323126882557932",
-      "dynamic_cvv": "957",
-      "expiry_month": "12",
-      "expiry_year": "2027",
-      "products": [{
-        "product_ref_id": "ref_01KKW...",
-        "external_product_id": null,
-        "name": "Premium Plan — Monthly",
-        "unit_price": "49.99",
-        "quantity": 1
-      }]
-    }]
-  }]
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `status` | `string` | `"pending"` → keep polling, `"awaiting_result"` → credential being generated, `"completed"` → credential ready, `"failed"` → error |
-| `transactions[].txn_id` | `string` | Transaction identifier |
-| `transactions[].status` | `string` | `"pending"`, `"awaiting_result"`, `"completed"`, or `"failed"` |
-| `transactions[].line_items[]` | `array` | One entry per merchant in the purchase context |
-| `transactions[].line_items[].txn_ref_id` | `string` | Transaction line item ID — **needed for `report-status`** |
-| `transactions[].line_items[].merchant_name` | `string` | Merchant name from purchase context |
-| `transactions[].line_items[].total_amount` | `string` | Line item total amount |
-| `transactions[].line_items[].token` | `string \| null` | Visa network token (16 digits) — NOT the real card number |
-| `transactions[].line_items[].dynamic_cvv` | `string \| null` | One-time CVV (3 digits) — changes per transaction |
-| `transactions[].line_items[].expiry_month` | `string \| null` | Token expiry month (MM) |
-| `transactions[].line_items[].expiry_year` | `string \| null` | Token expiry year (YYYY) |
-| `transactions[].line_items[].products[]` | `array` | Products in this line item |
-| `transactions[].error` | `object?` | Present if failed: `{ code, message }` |
-
-**Polling pattern:** Call every 3 seconds. Timeout after ~90 seconds. Add `?_t=${Date.now()}` to bust Next.js cache.
-
-**cURL Example:**
-
-```bash
-curl -s "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../payment-result" \
-  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" | jq
-```
-
-> **Common mistakes:**
-> | Mistake | Correct Approach |
-> |---------|-----------------|
-> | Using `session_token` in URL | Use `session_id` (e.g., `sess_01KKW...`) |
-> | Using `session_token` as Bearer auth | Use `MERCHANT_SECRET_KEY` (`sk_test_...`) |
-> | Calling `/v1/sessions/validate` | Use `/v1/sessions/{id}/payment-result` (validate is internal) |
-> | Expecting 2-digit expiry year | API returns 4-digit year (e.g., `"2027"`) |
-
-### `POST /v1/sessions/{session_id}/report-status` — Report Payment Outcome
-
-After your server processes the payment credential (network token + dynamic CVV), you **must** report the outcome back so Prava can relay it to Visa.
-
-**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}`
-
-**Request Body:**
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `txn_ref_id` | `string` | ✅ | Transaction line item ID from `payment-result` response (`line_items[].txn_ref_id`) |
-| `txn_status` | `string` | ✅ | `"APPROVED"` or `"DECLINED"` |
-| `txn_type` | `string` | | Default: `"PURCHASE"` |
-| `authorization_code` | `string` | | Max 128 chars. Auth code from your payment processor |
-| `response_code` | `string` | | Max 2 chars. Processor response code |
-| `amount_paid` | `string` | | Actual amount charged (if different from order amount) |
-| `product_statuses` | `array` | | Per-product status updates |
-| `product_statuses[].product_ref_id` | `string` | | Product ref ID from payment-result |
-| `product_statuses[].status` | `string` | | `"COMPLETED"`, `"FAILED"`, `"CANCELED"`, `"INPROGRESS"`, `"PENDING"`, `"ONHOLD"` |
-
-**Response (200):**
-
-```json
-{
-  "status": "confirmed",
-  "txn_ref_id": "tli_01KKW...",
-  "txn_status": "APPROVED",
-  "visa_confirmation": "SUCCESS"
-}
-```
-
-**cURL Example:**
-
-```bash
-curl -X POST "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../report-status" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
-  -d '{
-    "txn_ref_id": "tli_01KKW...",
-    "txn_status": "APPROVED",
-    "authorization_code": "AUTH123"
-  }'
-```
-
-### `GET /v1/listCards` — List Customer's Saved Cards
-
-Retrieve saved cards for a customer. Useful for showing card-on-file before creating a session.
-
-**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}`
-
-**Query Parameters:**
-
-| Param | Type | Required | Description |
-|-------|------|----------|-------------|
-| `customer_id` | `string` | ✅ | The `user_id` you used when creating sessions for this customer |
-| `status` | `string` | | `"active"` (default) or `"all"` |
-| `include_card_art` | `string` | | `"true"` or `"false"` (default). Include card art URLs |
-
-**Response (200):**
-
-```json
-{
-  "cards": [{
-    "card_id": "card_01KKW...",
-    "card_last4": "1111",
-    "card_brand": "VISA",
-    "card_exp_month": 12,
-    "card_exp_year": 26,
-    "masked_card_number": "4111...1111",
-    "status": "active",
-    "created_at": "2026-04-16T..."
-  }],
-  "count": 1
-}
-```
-
-**cURL Example:**
-
-```bash
-curl "https://sandbox.api.prava.space/v1/listCards?customer_id=user_123" \
-  -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY"
-```
-
-> **Tip:** Use `card_id` from this response in the `card.card_id` field when creating a session to pre-select a saved card.
-
-### `POST /v1/sessions/{session_id}/revoke` — Revoke Session
-
-**Auth:** `Authorization: Bearer {MERCHANT_SECRET_KEY}`
-
-**Response (200):** `{ "success": true }`
-
-### `GET /health` — Health Check
-
-No auth required. Returns `{ "status": "ok", "timestamp": "..." }`.
-
-```bash
-curl https://sandbox.api.prava.space/health
-```
-
----
-
-## SDK API Reference
-
-### Installation
-
-```bash
-npm install @prava-sdk/core
-```
-
-### Package Exports
-
-```typescript
-import {
-  PravaSDK,                    // Main SDK class
-  type PravaSDKConfig,         // Constructor config
-  type CollectPANOptions,      // collectPAN options
-  type CollectPANResult,       // Success result
-  type PravaError,             // Error object
-  type CardValidationState,    // onChange state
-  type FieldState,             // Per-field state
-  type CardFormStyles,         // Custom iframe styles
-  IframeManager,               // (Advanced) Low-level iframe control
-  PostMessageBridge,           // (Advanced) Low-level PostMessage handling
-} from '@prava-sdk/core';
-```
-
-### `new PravaSDK(config)`
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `publishableKey` | `string` | ✅ | Must start with `pk_test_` (sandbox) or `pk_live_` (production) |
-
-Throws `Error` if publishableKey is missing or doesn't start with `pk_`.
-
-### `prava.collectPAN(options)` → `Promise<CollectPANResult>`
-
-Collects card data via a secure iframe.
-
-| Option | Type | Required | Description |
-|--------|------|----------|-------------|
-| `sessionToken` | `string` | ✅ | From `POST /v1/sessions` response |
-| `iframeUrl` | `string` | ✅ | From session response |
-| `container` | `string \| HTMLElement` | ✅ | CSS selector or DOM element for iframe mount |
-| `onReady` | `() => void` | | Iframe loaded and ready |
-| `onChange` | `(state: CardValidationState) => void` | | Real-time validation on every input change |
-| `onSuccess` | `(result: CollectPANResult) => void` | | Card enrolled successfully |
-| `onError` | `(error: PravaError) => void` | | Error occurred |
-| `styles` | `CardFormStyles` | | Custom styles for card form inside iframe |
-
-**Return: `CollectPANResult`**
-
-```typescript
-interface CollectPANResult {
-  enrollmentId: string;  // Unique enrollment ID
-  last4: string;         // Last 4 digits of the card
-  brand: string;         // "visa", "mastercard", etc.
-  expMonth: number;      // 1-12
-  expYear: number;       // e.g., 2028
-}
-```
-
-**Error codes:**
-
-| Code | Meaning |
-|------|---------|
-| `SDK_ALREADY_ACTIVE` | Card collection session already in progress |
-| `INVALID_CONFIG` | iframeUrl missing or invalid |
-| `IFRAME_LOAD_ERROR` | Failed to load the secure iframe |
-| `SDK_INIT_ERROR` | General initialization error |
-
-### `prava.destroy()`
-
-Removes iframe, cleans up event listeners, releases resources. Always call on component unmount, before starting a new session, or after an error.
-
-### Types
-
-```typescript
-interface CardValidationState {
-  cardNumber: FieldState;
-  expiry: FieldState;
-  cvv: FieldState;
-  isComplete: boolean;    // true when ALL fields are valid
-}
-
-interface FieldState {
-  isEmpty: boolean;
-  isValid: boolean;
-  isFocused: boolean;
-  error?: string;
-}
-
-interface CardFormStyles {
-  base?: Record<string, string>;     // Base styles for all fields
-  invalid?: Record<string, string>;  // Styles when field is invalid
-  focus?: Record<string, string>;    // Styles when field is focused
-}
-
-interface PravaError {
-  code: string;
-  message: string;
-  details?: Record<string, unknown>;
-}
-```
-
-**CardFormStyles example:**
-
-```typescript
-const styles: CardFormStyles = {
-  base: { 'font-size': '16px', 'color': '#1a1a1a', 'font-family': 'Inter, sans-serif' },
-  invalid: { 'color': '#e53e3e' },
-  focus: { 'border-color': '#4f46e5' },
-};
-```
-
-### PostMessage Events (Advanced)
-
-**Iframe → SDK:**
-
-| Event | Payload | Description |
-|-------|---------|-------------|
-| `PRAVA_READY` | — | Iframe loaded and ready |
-| `PRAVA_CHANGE` | `CardValidationState` | Validation changed |
-| `PRAVA_ERROR` | `PravaError` | Error occurred |
-| `PRAVA_RESIZE` | `{ height }` | Iframe requests height change |
-| `PRAVA_ENROLLMENT_COMPLETE` | Enrollment data | Full enrollment completed |
-| `PRAVA_SAVED_CARDS_LOADED` | Cards list | Saved cards loaded (repeat flow) |
-| `PRAVA_TRANSACTION_CREATED` | Transaction data | Transaction created |
-| `PRAVA_TRANSACTION_COMPLETE` | `{ callback_url?: string }` | Payment completed. If `callback_url` present, SDK keeps bridge alive for redirect |
-| `PRAVA_REDIRECT` | `{ url: string }` | Iframe requests redirect to merchant callback URL — SDK navigates via `window.location.href` |
-
-**SDK → Iframe:**
-
-| Command | Description |
-|---------|-------------|
-| `PRAVA_INIT` | Initialize iframe with publishableKey + styles |
-| `PRAVA_PASSKEY_VERIFY_COMPLETE` | Send passkey verification result (assuranceData) to iframe |
-| `PRAVA_PASSKEY_VERIFY_FAILED` | Notify iframe that passkey verification failed |
-
-### Iframe Security
-
-- **Sandbox:** `allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox`
-- **Permissions:** `payment; publickey-credentials-get; publickey-credentials-create`
-- **Origin validation:** PostMessage restricted to iframe's origin only
-- **No backend URL injection:** Iframe determines its backend URL from its own hostname
-
-### Browser Support
-
-| Browser | Minimum Version |
-|---------|-----------------|
-| Chrome | 80+ |
-| Firefox | 80+ |
-| Safari | 14+ |
-| Edge | 80+ |
-
-WebAuthn/Passkey requires Web Authentication API support and biometric hardware (Face ID, Touch ID, fingerprint reader).
 
 ---
 
@@ -917,7 +452,7 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
   const sdkRef = useRef<PravaSDK | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // ⚠️ CRITICAL: React Strict Mode double-mount guard.
+  // CRITICAL: React Strict Mode double-mount guard.
   // Resets to false in cleanup so remount re-initializes.
   const hasStarted = useRef(false);
 
@@ -962,7 +497,7 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
     }
   }, [session, onError]);
 
-  // ⚠️ CRITICAL: Mount with Strict Mode handling
+  // CRITICAL: Mount with Strict Mode handling
   useEffect(() => {
     if (!hasStarted.current) {
       hasStarted.current = true;
@@ -976,7 +511,7 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ⚠️ CRITICAL: Fallback for onReady not firing.
+  // CRITICAL: Fallback for onReady not firing.
   // MutationObserver detects iframe + 5s hard timeout.
   useEffect(() => {
     const container = containerRef.current;
@@ -1015,7 +550,7 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
         </div>
       )}
 
-      {/* ⚠️ REQUIRED: iframe mounts here. Min ~400px height, overflow hidden. */}
+      {/* REQUIRED: iframe mounts here. Min ~400px height, overflow hidden. */}
       <div ref={containerRef} id="prava-card-form" style={{ minHeight: '400px', overflow: 'hidden' }} />
     </div>
   );
@@ -1250,10 +785,10 @@ export default router;
   <script type="module">
     import { PravaSDK } from '@prava-sdk/core';
 
-    // ⚠️ In production, session creation MUST happen on your server.
+    // In production, session creation MUST happen on your server.
     const PUBLISHABLE_KEY = 'pk_test_YOUR_KEY';
     const BACKEND_URL = 'https://sandbox.api.prava.space';
-    const SECRET_KEY = 'sk_test_YOUR_KEY'; // ⚠️ Server-side only in production!
+    const SECRET_KEY = 'sk_test_YOUR_KEY'; // Server-side only in production!
 
     let sdk = null;
 
@@ -1291,7 +826,7 @@ export default router;
           onReady: () => { document.getElementById('status').textContent = ''; },
           onSuccess: (result) => {
             document.getElementById('status').textContent =
-              `✓ Card enrolled: ${result.brand} ****${result.last4}`;
+              `Card enrolled: ${result.brand} ****${result.last4}`;
           },
           onError: (err) => {
             document.getElementById('status').textContent = `Error: ${err.message}`;
