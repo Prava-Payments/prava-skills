@@ -16,7 +16,9 @@
   "files": [
     "dist",
     "prava-agent-payments",
-    "prava-sdk-integration"
+    "prava-sdk-integration",
+    "!**/docs",
+    "!**/superpowers"
   ],
   "scripts": {
     "build": "tsc",

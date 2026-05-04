@@ -55,6 +55,15 @@ After install, verify:
 prava --version
 ```
 
+## Version Check (automatic)
+
+The CLI automatically checks for updates on every API call. Watch for two notices in command output:
+
+- **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
+- **Skill update notice** — Run `npx skills update prava-agent-payments -g` to get the latest skill instructions. Do this before continuing with any payment flow.
+
+Do not run separate version-check commands — the CLI handles this automatically.
+
 ## Steps to Collect a Payment
 
 ### 1. Ensure agent is linked

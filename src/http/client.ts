@@ -3,16 +3,14 @@
  *
  * Makes signed API requests to the Prava backend.
  * Auto-attaches Ed25519 signature headers when agent credentials provided.
- * Checks X-Min-CLI-Version response header for update notifications.
+ * Checks X-Min-CLI-Version and X-Min-Skill-Version response headers for update notifications.
  */
 
 import { signRequest } from '../crypto/keys.js';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-
-const DEFAULT_SERVER = 'https://api.prava.space';
-const TIMEOUT_MS = 30_000;
+import { config } from '../config.js';
 
 interface RequestOptions {
   method: 'GET' | 'POST';
@@ -53,7 +51,7 @@ export class PravaClient {
   private cliVersion: string;
 
   constructor(serverUrl?: string) {
-    this.serverUrl = serverUrl ?? process.env['PRAVA_SERVER_URL'] ?? DEFAULT_SERVER;
+    this.serverUrl = serverUrl ?? config.apiServerUrl;
     this.cliVersion = getCliVersion();
   }
 
@@ -76,7 +74,7 @@ export class PravaClient {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+    const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);
 
     try {
       const response = await fetch(url, {
@@ -88,10 +86,15 @@ export class PravaClient {
 
       const data = await response.json().catch(() => ({})) as T;
 
-      // Check version header
+      // Check version headers
       const minVersion = response.headers.get('x-min-cli-version');
       if (minVersion) {
-        this.checkVersion(minVersion);
+        this.checkCliVersion(minVersion);
+      }
+
+      const minSkillVersion = response.headers.get('x-min-skill-version');
+      if (minSkillVersion) {
+        this.checkSkillVersion(minSkillVersion);
       }
 
       return {
@@ -104,7 +107,7 @@ export class PravaClient {
     }
   }
 
-  private checkVersion(minVersion: string): void {
+  private checkCliVersion(minVersion: string): void {
     const cmp = compareSemver(this.cliVersion, minVersion);
     if (cmp < 0) {
       // Check if major version mismatch (critical — block)
@@ -124,5 +127,12 @@ export class PravaClient {
         `\nUpdate available: npm update -g @prava-sdk/cli (current: ${this.cliVersion}, latest: ${minVersion})\n`,
       );
     }
+  }
+
+  private checkSkillVersion(minSkillVersion: string): void {
+    console.warn(
+      `\nSkill update required (minimum: ${minSkillVersion}).` +
+      `\nRun: npx skills update prava-agent-payments -g\n`,
+    );
   }
 }

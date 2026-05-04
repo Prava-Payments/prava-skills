@@ -11,8 +11,7 @@ import { AgentStore } from '../storage/agent-store.js';
 import { generateKeyPair } from '../crypto/keys.js';
 import { generateLinkId } from '../crypto/link-id.js';
 import { PravaClient } from '../http/client.js';
-
-const DASHBOARD_URL = process.env['PRAVA_DASHBOARD_URL'] ?? 'https://wallet.prava.space';
+import { config } from '../config.js';
 const POLL_INITIAL_INTERVAL_MS = 3_000;
 const POLL_MAX_WAIT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -56,7 +55,7 @@ export async function setupCommand(opts: {
   });
   if (opts.description) params.set('d', opts.description);
 
-  const linkUrl = `${DASHBOARD_URL}/link-agent?${params.toString()}`;
+  const linkUrl = `${config.dashboardUrl}/link-agent?${params.toString()}`;
 
   console.log(`\nTo link this agent, open this URL and approve:\n`);
   console.log(linkUrl);
