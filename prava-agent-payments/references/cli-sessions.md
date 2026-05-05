@@ -74,11 +74,13 @@ Share this URL to complete card entry.
 Run `prava sessions poll --session-id ses_abc123` to wait for card entry.
 ```
 
-Show the payment URL to the user, then run the poll command:
+Show the payment URL to the user, then IMMEDIATELY run the poll command — do NOT wait for the user to respond:
 
 ```bash
 prava sessions poll --session-id ses_abc123
 ```
+
+The user opens the payment URL in their browser while the poll waits.
 
 ### Output (sessions poll)
 

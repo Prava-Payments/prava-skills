@@ -1,6 +1,6 @@
 ---
 name: prava-agent-payments
-version: 0.5.0
+version: 0.5.1
 
 description: Payment collection for AI agents — install CLI, link to user's Prava account, and collect tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated purchases. No card details ever exposed to the AI.
 homepage: https://prava.space
@@ -72,8 +72,8 @@ Run: `prava status`
 
 Decision tree:
 - **"active"** — Move to step 2.
-- **"pending"** — Remind user to open the approval URL and approve. Then run `prava setup poll` to wait for approval, or re-check with `prava status`.
-- **"No agent configured"** — Run `prava setup`. The command prints a linking URL and exits immediately — show the URL to the user. Then run `prava setup poll` to wait for approval. Read [cli-setup reference](references/cli-setup.md).
+- **"pending"** — Remind user to open the approval URL and approve. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond.
+- **"No agent configured"** — Run `prava setup`. Show the linking URL to the user. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond or confirm. Read [cli-setup reference](references/cli-setup.md).
 
 IMPORTANT: If the user's original intent was to make a purchase
 and you just completed setup, proceed IMMEDIATELY to step 2.
@@ -108,13 +108,13 @@ The command:
 2. Prints a payment URL and session ID — show the URL to the user.
 3. **Exits immediately** (does NOT block).
 
-Then run the poll command to wait for card entry:
+IMMEDIATELY run the poll command — do NOT wait for user to respond:
 
 ```bash
 prava sessions poll --session-id <session_id>
 ```
 
-This polls up to 10 minutes and returns tokenized card credentials.
+This polls up to 10 minutes and returns tokenized card credentials. The user opens the payment URL in their browser while the poll waits.
 
 Read [cli-sessions reference](references/cli-sessions.md) for full details.
 

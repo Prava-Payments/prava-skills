@@ -51,15 +51,10 @@ export async function setupCommand(opts: {
     linked: false,
   });
 
-  // Construct linking URL
-  const params = new URLSearchParams({
-    lid: linkId,
-    pk: keys.publicKey,
-    n: opts.name,
-  });
-  if (opts.description) params.set('d', opts.description);
-
-  const linkUrl = `${config.dashboardUrl}/link-agent?${params.toString()}`;
+  // Construct linking URL — use encodeURIComponent (not URLSearchParams)
+  // so spaces become %20 instead of +, which terminals recognize as clickable links.
+  let linkUrl = `${config.dashboardUrl}/link-agent?lid=${encodeURIComponent(linkId)}&pk=${encodeURIComponent(keys.publicKey)}&n=${encodeURIComponent(opts.name)}`;
+  if (opts.description) linkUrl += `&d=${encodeURIComponent(opts.description)}`;
 
   console.log(`\nTo link this agent, open this URL and approve:\n`);
   console.log(linkUrl);

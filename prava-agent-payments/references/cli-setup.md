@@ -44,13 +44,13 @@ Show the URL to the user:
 
 ### Step 2 — Wait for approval
 
-After the user has the URL, run:
+IMMEDIATELY after showing the URL, run — do NOT wait for the user to respond or confirm:
 
 ```bash
 prava setup poll
 ```
 
-This polls for up to 15 minutes. Output on success:
+The user opens the URL in their browser while the poll waits. Polls for up to 15 minutes. Output on success:
 ```
 Waiting for approval of "Claude Code"...
 ...
