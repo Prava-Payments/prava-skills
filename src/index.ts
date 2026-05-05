@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name('prava')
   .description('CLI for AI agents to collect card payments via Prava')
-  .version('0.1.0');
+  .version('0.1.1');
 
 const setup = program
   .command('setup')
