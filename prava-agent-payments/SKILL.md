@@ -1,6 +1,6 @@
 ---
 name: prava-agent-payments
-version: 0.4.0
+version: 0.5.0
 
 description: Payment collection for AI agents — install CLI, link to user's Prava account, and collect tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated purchases. No card details ever exposed to the AI.
 homepage: https://prava.space
@@ -72,8 +72,8 @@ Run: `prava status`
 
 Decision tree:
 - **"active"** — Move to step 2.
-- **"pending"** — Remind user to open the approval URL and approve. Wait for them.
-- **"No agent configured"** — Run `prava setup`. Read [cli-setup reference](references/cli-setup.md).
+- **"pending"** — Remind user to open the approval URL and approve. Then run `prava setup poll` to wait for approval, or re-check with `prava status`.
+- **"No agent configured"** — Run `prava setup`. The command prints a linking URL and exits immediately — show the URL to the user. Then run `prava setup poll` to wait for approval. Read [cli-setup reference](references/cli-setup.md).
 
 IMPORTANT: If the user's original intent was to make a purchase
 and you just completed setup, proceed IMMEDIATELY to step 2.
@@ -104,9 +104,17 @@ prava sessions create \
 ```
 
 The command:
-1. Prints a payment URL — show it to the user.
-2. Waits for the user to enter their card (polls up to 10 minutes).
-3. Returns tokenized card credentials.
+1. Creates the session on the backend.
+2. Prints a payment URL and session ID — show the URL to the user.
+3. **Exits immediately** (does NOT block).
+
+Then run the poll command to wait for card entry:
+
+```bash
+prava sessions poll --session-id <session_id>
+```
+
+This polls up to 10 minutes and returns tokenized card credentials.
 
 Read [cli-sessions reference](references/cli-sessions.md) for full details.
 
@@ -137,9 +145,11 @@ The user's original intent (e.g., "buy coffee") must not be interrupted.
 ## CLI Quick Reference
 
 ```bash
-prava setup --name "<name>" [--description "<desc>"]
-prava status
-prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]
+prava setup --name "<name>" [--description "<desc>"]   # prints URL, exits immediately
+prava setup poll                                        # waits for user to approve the link
+prava status                                            # checks link status (also detects approval)
+prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]   # creates session, prints URL, exits immediately
+prava sessions poll --session-id <id>                   # waits for card tokenization
 ```
 
 ## Output Contract

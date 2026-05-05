@@ -119,11 +119,32 @@ export async function sessionsCreateCommand(opts: {
   const session = sessionResponse.data;
 
   console.log(`\nSession created.`);
+  console.log(`Session ID: ${session.session_id}`);
   console.log(`Payment URL: ${session.payment_url}`);
   console.log(`\nShare this URL to complete card entry.`);
-  console.log(`\nWaiting for card entry...`);
+  console.log(`Run \`prava sessions poll --session-id ${session.session_id}\` to wait for card entry.`);
+}
 
-  // Poll for tokenization result
+export async function sessionsPollCommand(opts: {
+  sessionId: string;
+}): Promise<void> {
+  const store = new AgentStore();
+  const data = store.load();
+
+  if (!data) {
+    console.error('No agent configured. Run: prava setup --name "<name>"');
+    process.exit(2);
+  }
+
+  if (!data.linked || !data.agentId) {
+    console.error('Agent not linked. Run: prava setup --name "<name>"');
+    process.exit(2);
+  }
+
+  const client = new PravaClient();
+
+  console.log(`Waiting for card entry on session ${opts.sessionId}...`);
+
   const startTime = Date.now();
   let interval = POLL_INITIAL_INTERVAL_MS;
 
@@ -134,7 +155,7 @@ export async function sessionsCreateCommand(opts: {
     try {
       const resultResponse = await client.request<SessionResultResponse>({
         method: 'GET',
-        path: `/v1/sessions/agent/${session.session_id}/payment-result`,
+        path: `/v1/sessions/agent/${opts.sessionId}/payment-result`,
         agentId: data.agentId,
         privateKey: data.privateKey,
       });

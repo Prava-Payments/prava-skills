@@ -19,7 +19,7 @@ prava setup --name "<name>" [--description "<desc>"]
 
 ## Flow
 
-### Step 1 — Start setup
+### Step 1 — Generate link
 
 ```bash
 prava setup --name "Claude Code" --description "Anthropic's coding agent"
@@ -28,25 +28,33 @@ prava setup --name "Claude Code" --description "Anthropic's coding agent"
 The CLI:
 - Generates a secure Ed25519 keypair locally
 - Prints a linking URL pointing to `wallet.prava.space`
-- Polls for approval automatically
+- **Exits immediately** (does NOT block)
 
 Output:
 ```
 To link this agent, open this URL and approve:
 https://wallet.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code
-Waiting for approval...
+
+Run `prava setup poll` to wait for approval.
 ```
 
 Show the URL to the user:
 > To connect to Prava, open this link and approve:
 > [URL from output]
 
-### Step 2 — CLI handles the rest
+### Step 2 — Wait for approval
 
-The CLI automatically detects when the user approves. No further
-commands needed. Output continues:
+After the user has the URL, run:
 
+```bash
+prava setup poll
 ```
+
+This polls for up to 15 minutes. Output on success:
+```
+Waiting for approval of "Claude Code"...
+...
+
 Linked! Agent ID: aa_7kMnP2
 Ready to create sessions.
 ```
@@ -55,6 +63,9 @@ If the link expires (15 minutes), output:
 ```
 Link expired. Run `prava setup` again.
 ```
+
+Alternatively, you can skip `setup poll` and just check with `prava status` —
+it also detects approval for pending agents.
 
 ### Already linked
 
@@ -75,4 +86,4 @@ Otherwise: "Agent linked! Ready to collect payments."
 
 - Running setup when already linked (check `prava status` first).
 - Asking user for credentials. The CLI handles all auth locally.
-- Waiting for user to say "done" — the CLI polls automatically.
+- Waiting for user to say "done" — run `prava setup poll` or check `prava status`.

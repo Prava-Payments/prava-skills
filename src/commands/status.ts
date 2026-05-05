@@ -20,12 +20,35 @@ export async function statusCommand(): Promise<void> {
     process.exit(2);
   }
 
-  // Pending (not yet approved)
+  // Pending (not yet approved) — check server in case user approved since last check
   if (!data.linked) {
-    console.log(`Agent:   ${data.name}`);
-    console.log(`Status:  pending`);
-    console.log(`Link:    Waiting for approval.`);
-    process.exit(2);
+    const client = new PravaClient();
+    try {
+      const response = await client.request<{
+        status: string;
+        agent_id?: string;
+      }>({
+        method: 'GET',
+        path: `/v1/agents/link/status?lid=${data.linkId}`,
+      });
+
+      if (response.data.status === 'approved' && response.data.agent_id) {
+        data.linked = true;
+        data.agentId = response.data.agent_id;
+        data.linkedAt = new Date().toISOString();
+        store.save(data);
+        // Fall through to the linked branch below
+      }
+    } catch {
+      // Network error — report as pending
+    }
+
+    if (!data.linked) {
+      console.log(`Agent:   ${data.name}`);
+      console.log(`Status:  pending`);
+      console.log(`Link:    Waiting for approval.`);
+      process.exit(2);
+    }
   }
 
   // Linked — verify with server

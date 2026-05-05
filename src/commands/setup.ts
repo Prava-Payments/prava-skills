@@ -2,9 +2,13 @@
  * prava setup — Link agent to Prava account
  *
  * Generates Ed25519 keypair + link_id locally, constructs a linking URL,
- * prints it, and polls for approval. The user opens the URL in their browser,
- * logs into the Prava dashboard, and clicks Approve. The CLI detects the
- * approval and saves the agent_id locally.
+ * prints it, and exits immediately. The user opens the URL in their browser,
+ * logs into the Prava dashboard, and clicks Approve.
+ *
+ * prava setup poll — Polls for approval
+ *
+ * Reads the pending link_id from ~/.prava/agent.json and polls the server
+ * until the user approves or the timeout expires.
  */
 
 import { AgentStore } from '../storage/agent-store.js';
@@ -12,6 +16,7 @@ import { generateKeyPair } from '../crypto/keys.js';
 import { generateLinkId } from '../crypto/link-id.js';
 import { PravaClient } from '../http/client.js';
 import { config } from '../config.js';
+
 const POLL_INITIAL_INTERVAL_MS = 3_000;
 const POLL_MAX_WAIT_MS = 15 * 60 * 1000; // 15 minutes
 
@@ -24,7 +29,6 @@ export async function setupCommand(opts: {
   description?: string;
 }): Promise<void> {
   const store = new AgentStore();
-  const client = new PravaClient();
 
   // Guard: already linked
   const existing = store.load();
@@ -59,9 +63,27 @@ export async function setupCommand(opts: {
 
   console.log(`\nTo link this agent, open this URL and approve:\n`);
   console.log(linkUrl);
-  console.log(`\nWaiting for approval...`);
+  console.log(`\nRun \`prava setup poll\` to wait for approval.`);
+}
 
-  // Poll for approval with exponential backoff
+export async function setupPollCommand(): Promise<void> {
+  const store = new AgentStore();
+  const client = new PravaClient();
+
+  const data = store.load();
+
+  if (!data) {
+    console.error('No agent configured. Run: prava setup --name "<name>"');
+    process.exit(2);
+  }
+
+  if (data.linked) {
+    console.log(`Already linked as "${data.name}" (${data.agentId}).`);
+    process.exit(0);
+  }
+
+  console.log(`Waiting for approval of "${data.name}"...`);
+
   const startTime = Date.now();
   let interval = POLL_INITIAL_INTERVAL_MS;
 
@@ -75,12 +97,10 @@ export async function setupCommand(opts: {
         agent_id?: string;
       }>({
         method: 'GET',
-        path: `/v1/agents/link/status?lid=${linkId}`,
+        path: `/v1/agents/link/status?lid=${data.linkId}`,
       });
 
       if (response.data.status === 'approved' && response.data.agent_id) {
-        // Update local store
-        const data = store.load()!;
         data.linked = true;
         data.agentId = response.data.agent_id;
         data.linkedAt = new Date().toISOString();

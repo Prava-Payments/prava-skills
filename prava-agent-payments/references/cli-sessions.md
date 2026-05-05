@@ -63,15 +63,27 @@ prava sessions create \
   --product '{"description":"1x Croissant","unit_price":"3.50"}'
 ```
 
-### Output
+### Output (sessions create)
 
 ```
 Session created.
+Session ID: ses_abc123
 Payment URL: https://collect.prava.space?session=eyJhbGciOiJI...
 
 Share this URL to complete card entry.
+Run `prava sessions poll --session-id ses_abc123` to wait for card entry.
+```
 
-Waiting for card entry...
+Show the payment URL to the user, then run the poll command:
+
+```bash
+prava sessions poll --session-id ses_abc123
+```
+
+### Output (sessions poll)
+
+```
+Waiting for card entry on session ses_abc123...
 ............
 
 Card tokenized.
