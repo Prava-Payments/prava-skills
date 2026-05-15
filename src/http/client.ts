@@ -132,7 +132,7 @@ export class PravaClient {
   private checkSkillVersion(minSkillVersion: string): void {
     console.warn(
       `\nSkill update required (minimum: ${minSkillVersion}).` +
-      `\nRun: npx skills update prava-agent-payments -g\n`,
+      `\nRun: npx skills update prava-wallet -g\n`,
     );
   }
 }

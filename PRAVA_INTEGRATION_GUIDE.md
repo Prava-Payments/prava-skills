@@ -20,14 +20,14 @@ You'll receive three credentials when your merchant account is created:
 |---|---|---|
 | **Secret Key** | `sk_test_xxx` / `sk_live_xxx` | Server-side **ONLY** — never expose to the client |
 | **Publishable Key** | `pk_test_xxx` / `pk_live_xxx` | Client-side — safe for the browser |
-| **Backend URL** | `https://sandbox.api.prava.space` | API base URL (sandbox shown) |
+| **Backend URL** | `https://api.prava.space` | API base URL (sandbox shown) |
 
 Add them to your environment (`.env` / `.env.local`):
 
 ```env
 MERCHANT_SECRET_KEY=sk_test_your_secret_key          # Server-side ONLY
 NEXT_PUBLIC_PUBLISHABLE_KEY=pk_test_your_pub_key      # Client-side safe
-NEXT_PUBLIC_BACKEND_URL=https://sandbox.api.prava.space
+NEXT_PUBLIC_BACKEND_URL=https://api.prava.space
 ```
 
 > ⚠️ **Never expose `MERCHANT_SECRET_KEY` in client-side code or environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`.**
@@ -328,11 +328,11 @@ async function pollForCredential(sessionId: string): Promise<any> {
 
 | Item | Value |
 |---|---|
-| **Backend URL** | `https://sandbox.api.prava.space` |
+| **Backend URL** | `https://api.prava.space` |
 | **Secret Key** | Starts with `sk_test_` |
 | **Publishable Key** | Starts with `pk_test_` |
 | **Test Cards** | Provided by the Prava team during onboarding |
-| **Health Check** | `curl https://sandbox.api.prava.space/health` |
+| **Health Check** | `curl https://api.prava.space/health` |
 
 > Passkeys require a browser with **WebAuthn support** (Chrome 80+, Safari 14+, Firefox 80+, Edge 80+) and biometric hardware (Face ID, Touch ID, or fingerprint reader).
 

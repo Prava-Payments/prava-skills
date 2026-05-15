@@ -1,8 +1,8 @@
 ---
-name: prava-agent-payments
-version: 0.5.1
+name: prava-wallet
+version: 1.0.0
 
-description: Payment collection for AI agents — install CLI, link to user's Prava account, and collect tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated purchases. No card details ever exposed to the AI.
+description: Smart wallet for AI agents — link to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated purchases. For open-source or personal AI agent setups like OpenClaw, Hermes, Claude Code. No card details ever exposed to the AI.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
@@ -18,9 +18,9 @@ tags:
   - cli
 ---
 
-# Prava — Agent Payment Collection
+# Prava Wallet — Smart Wallet for AI Agents
 
-Collect card payments on behalf of users via the Prava CLI. The user approves once, then the agent can create payment sessions and receive tokenized card credentials to complete purchases.
+Link to a user's Prava account and retrieve tokenized card credentials via the Prava CLI. The user approves once, then the agent can create payment sessions and receive tokenized card credentials to complete purchases.
 
 ## When to Activate
 
@@ -60,11 +60,11 @@ prava --version
 The CLI automatically checks for updates on every API call. Watch for two notices in command output:
 
 - **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
-- **Skill update notice** — Run `npx skills update prava-agent-payments -g` to get the latest skill instructions. Do this before continuing with any payment flow.
+- **Skill update notice** — Run `npx skills update prava-wallet -g` to get the latest skill instructions. Do this before continuing with any payment flow.
 
 Do not run separate version-check commands — the CLI handles this automatically.
 
-## Steps to Collect a Payment
+## Steps to Retrieve Payment Credentials
 
 ### 1. Ensure agent is linked
 

@@ -7,7 +7,7 @@
 
 export const config = {
   /** Base URL for the Prava API server */
-  apiServerUrl: process.env['PRAVA_SERVER_URL'] ?? 'https://sandbox.api.prava.space',
+  apiServerUrl: process.env['PRAVA_SERVER_URL'] ?? 'https://api.prava.space',
 
   /** Base URL for the Prava dashboard / wallet UI */
   dashboardUrl: process.env['PRAVA_DASHBOARD_URL'] ?? 'https://wallet.prava.space',

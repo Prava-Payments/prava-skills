@@ -14,7 +14,7 @@
 
 // ── Configuration ─────────────────────────────────────────
 // These come from your .env.local file
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://sandbox.api.prava.space';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 // ── Types ──────────────────────────────────────────────────

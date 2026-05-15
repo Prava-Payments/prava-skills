@@ -15,13 +15,13 @@ Each skill includes:
 
 | Skill | Audience | Description |
 |-------|----------|-------------|
-| [`prava-agent-payments`](./prava-agent-payments/) | **AI Agents** | Collect card payments via the Prava CLI. Install CLI, link agent to user's Prava account, create payment sessions, receive tokenized credentials (Visa network token + dynamic CVV), and complete purchases. |
-| [`prava-sdk-integration`](./prava-sdk-integration/) | **Merchants / Developers** | Integrate Prava's payment SDK into web apps. Securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey verification. Includes templates for Next.js, Express, and Vanilla JS. |
+| [`prava-wallet`](./prava-wallet/) | **AI Agents** | Smart wallet for AI agents. Link to a user's Prava account, create payment sessions, and retrieve tokenized credentials (Visa network token + dynamic CVV) for agent-initiated purchases. For open-source or personal AI agent setups like OpenClaw, Hermes, Claude Code. |
+| [`prava-sdk-integration`](./prava-sdk-integration/) | **AI Applications** | Integrate Prava's payment SDK into AI applications. Securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey verification. Includes templates for Next.js, Express, and Vanilla JS. |
 
 ## Repository Structure
 
 ```
-prava-agent-payments/              # Skill for AI agents (CLI-based)
+prava-wallet/                      # Skill for AI agents (CLI-based)
 ├── SKILL.md                       # Main skill instructions
 ├── evals/
 │   └── evals.json                 # Skill evaluation test cases
@@ -30,7 +30,7 @@ prava-agent-payments/              # Skill for AI agents (CLI-based)
     ├── cli-status.md              # Status check states
     └── cli-sessions.md            # Payment session + credential output
 
-prava-sdk-integration/             # Skill for merchants (SDK-based)
+prava-sdk-integration/             # Skill for AI applications (SDK-based)
 ├── SKILL.md                       # Main skill instructions
 ├── references/
 │   ├── sdk-api-reference.md       # Full PravaSDK class API
@@ -58,14 +58,14 @@ npx skills add https://github.com/Prava-Payments/prava-skills --global --yes
 Or install a specific skill:
 
 ```bash
-# Agent payment collection skill
-npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-agent-payments --global --yes
+# Prava wallet skill
+npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-wallet --global --yes
 
-# Merchant SDK integration skill
+# AI application SDK integration skill
 npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-sdk-integration --global --yes
 ```
 
-### Install CLI (for Agent Payment Collection)
+### Install CLI
 
 ```bash
 npm install -g @prava-sdk/cli
@@ -79,7 +79,7 @@ Point your AI coding agent at this repository and ask it to "integrate Prava pay
 
 ## About Prava
 
-[Prava](https://prava.space) enables AI apps to accept card payments without ever seeing raw card details. Cards are tokenized with the networks (Visa) and secured with passkeys (biometrics) — giving AI agents the ability to make purchases on behalf of users in a PCI-compliant, secure way.
+[Prava](https://prava.space) is the payment stack for AI agents — securely collect cards via PCI-compliant iframe, tokenize with Visa, protect transactions with passkeys (biometrics), and retrieve one-time payment credentials (network token + dynamic CVV) for agent-initiated purchases. No card details ever exposed to the AI.
 
 ---
 

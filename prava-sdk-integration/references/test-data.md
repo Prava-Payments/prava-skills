@@ -7,7 +7,7 @@ Use this data when testing in the **sandbox** environment.
 ## Sandbox Backend URL
 
 ```
-https://sandbox.api.prava.space
+https://api.prava.space
 ```
 
 ---
@@ -47,7 +47,7 @@ Once you have your test card, the details will follow this format:
 Quick test with cURL:
 
 ```bash
-curl -X POST https://sandbox.api.prava.space/v1/sessions \
+curl -X POST https://api.prava.space/v1/sessions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SK_TEST_KEY" \
   -d '{
@@ -98,7 +98,7 @@ Expected response:
 Verify the sandbox backend is online:
 
 ```bash
-curl https://sandbox.api.prava.space/health
+curl https://api.prava.space/health
 ```
 
 Expected:

@@ -286,7 +286,7 @@ async function pollForCredential(sessionId: string): Promise<any> {
 ### cURL Example
 
 ```bash
-curl -s https://sandbox.api.prava.space/v1/sessions/{session_id}/payment-result \
+curl -s https://api.prava.space/v1/sessions/{session_id}/payment-result \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" | jq
 ```
 
@@ -364,7 +364,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
 ### cURL Example
 
 ```bash
-curl -X POST "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../report-status" \
+curl -X POST "https://api.prava.space/v1/sessions/sess_01KKW.../report-status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
   -d '{
@@ -419,7 +419,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
 ### cURL Example
 
 ```bash
-curl "https://sandbox.api.prava.space/v1/listCards?customer_id=user_123" \
+curl "https://api.prava.space/v1/listCards?customer_id=user_123" \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY"
 ```
 
@@ -477,7 +477,7 @@ const isHealthy = await fetch(`${BACKEND_URL}/health`)
 ### Create Session
 
 ```bash
-curl -X POST https://sandbox.api.prava.space/v1/sessions \
+curl -X POST https://api.prava.space/v1/sessions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
   -d '{
@@ -508,7 +508,7 @@ curl -X POST https://sandbox.api.prava.space/v1/sessions \
 ### Check Health
 
 ```bash
-curl https://sandbox.api.prava.space/health
+curl https://api.prava.space/health
 ```
 
 ---

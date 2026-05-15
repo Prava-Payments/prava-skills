@@ -18,15 +18,19 @@ const program = new Command();
 
 program
   .name('prava')
-  .description('CLI for AI agents to collect card payments via Prava')
+  .description('Prava CLI — smart wallet for AI agents')
   .version('0.1.1');
 
 const setup = program
   .command('setup')
   .description('Link this agent to a Prava account')
-  .requiredOption('--name <name>', 'Agent display name (e.g., "Claude Code")')
+  .option('--name <name>', 'Agent display name (e.g., "Claude Code")')
   .option('--description <desc>', 'Short description shown on approval screen')
   .action(async (opts) => {
+    if (!opts.name) {
+      console.error('Error: required option --name <name> not specified');
+      process.exit(1);
+    }
     await setupCommand({ name: opts.name, description: opts.description });
   });
 

@@ -1,12 +1,12 @@
 ---
 name: prava-sdk-integration
-version: 0.4.0
+version: 1.0.0
 
-description: Integrate Prava's payment SDK into web applications — securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey (biometric) verification, and poll for one-time payment credentials (network token + dynamic CVV). For merchant/developer integration, not for AI agent CLI usage.
+description: Integrate Prava's payment SDK into AI applications — securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey (biometric) verification, and poll for one-time payment credentials (network token + dynamic CVV). For AI application integration, not for AI agent CLI usage.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
-metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"MERCHANT_SECRET_KEY","requires":{"env":[],"npm":["@prava-sdk/core"]}}}
+metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"API_SECRET_KEY","requires":{"env":[],"npm":["@prava-sdk/core"]}}}
 tags:
   - payments
   - sdk
@@ -15,14 +15,14 @@ tags:
   - passkey
   - visa
   - tokenization
-  - merchant
+  - ai-applications
 ---
 
-# Prava SDK Integration — Merchant Guide
+# Prava SDK Integration — Application Guide
 
-This skill teaches AI coding agents how to integrate Prava payments into any web application using the `@prava-sdk/core` npm package and Prava REST API.
+This skill teaches AI coding agents how to integrate Prava payments into any AI application using the `@prava-sdk/core` npm package and Prava REST API.
 
-> **Looking for the AI agent CLI flow?** That's a separate skill: `prava-agent-payments`. This skill is for merchants integrating Prava into their web apps.
+> **Looking for the AI agent CLI flow?** That's a separate skill: `prava-wallet`. This skill is for AI applications integrating Prava into their web apps.
 
 ---
 
@@ -104,15 +104,15 @@ Before starting integration, you MUST collect these from the user:
 |-------|--------|---------|
 | **Publishable Key** | `pk_test_xxx` or `pk_live_xxx` | `pk_test_TaFAJcKaldaFoXErIEHw03p_7lAhXY94D3RsXgLV_3s` |
 | **Secret Key** | `sk_test_xxx` or `sk_live_xxx` | `sk_test_zGzBj2QzZVaFtO4dkY2ZLAGe7wRSf1zgzUPBheBksA4` |
-| **Backend URL** | Full URL | `https://sandbox.api.prava.space` |
+| **Backend URL** | Full URL | `https://api.prava.space` |
 
 If the user hasn't provided these, ask:
 > "To integrate Prava, I need three things from you:
 > 1. Your **Publishable Key** (starts with `pk_test_` or `pk_live_`)
 > 2. Your **Secret Key** (starts with `sk_test_` or `sk_live_`)
-> 3. Your **Prava Backend URL** (e.g., `https://sandbox.api.prava.space`)
+> 3. Your **Prava Backend URL** (e.g., `https://api.prava.space`)
 >
-> You should have received these when your merchant account was created."
+> You should have received these when your account was created."
 
 ---
 
@@ -140,14 +140,14 @@ Create a `.env` or `.env.local` file (depending on framework):
 
 **Next.js** (`.env.local`):
 ```env
-NEXT_PUBLIC_BACKEND_URL=https://sandbox.api.prava.space
+NEXT_PUBLIC_BACKEND_URL=https://api.prava.space
 MERCHANT_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 NEXT_PUBLIC_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 ```
 
 **Express** (`.env`):
 ```env
-PRAVA_BACKEND_URL=https://sandbox.api.prava.space
+PRAVA_BACKEND_URL=https://api.prava.space
 MERCHANT_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 PRAVA_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 ```
@@ -275,7 +275,7 @@ These are common pitfalls discovered during integration. Address them proactivel
 ```typescript
 'use server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://sandbox.api.prava.space';
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 export interface SessionResponse {
@@ -673,7 +673,7 @@ export default function CheckoutPage() {
 import { Router, Request, Response } from 'express';
 
 const router = Router();
-const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://sandbox.api.prava.space';
+const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 // POST /api/prava/create-session
@@ -787,7 +787,7 @@ export default router;
 
     // In production, session creation MUST happen on your server.
     const PUBLISHABLE_KEY = 'pk_test_YOUR_KEY';
-    const BACKEND_URL = 'https://sandbox.api.prava.space';
+    const BACKEND_URL = 'https://api.prava.space';
     const SECRET_KEY = 'sk_test_YOUR_KEY'; // Server-side only in production!
 
     let sdk = null;
@@ -851,12 +851,12 @@ export default router;
 
 | Item | Value |
 |------|-------|
-| **Sandbox Backend** | `https://sandbox.api.prava.space` |
+| **Sandbox Backend** | `https://api.prava.space` |
 | **Production Backend** | `https://api.prava.space` |
 | **Secret Key format** | `sk_test_xxx` (sandbox) / `sk_live_xxx` (production) |
 | **Publishable Key format** | `pk_test_xxx` (sandbox) / `pk_live_xxx` (production) |
 | **Test Cards** | Provided by Prava team during onboarding |
-| **Health Check** | `curl https://sandbox.api.prava.space/health` |
+| **Health Check** | `curl https://api.prava.space/health` |
 | **Passkey requirements** | HTTPS (or localhost) + WebAuthn browser (Chrome 80+, Safari 14+, Firefox 80+, Edge 80+) + biometric hardware |
 
 **Supported currencies:** Any valid ISO 4217 3-letter code — `USD`, `EUR`, `GBP`, `INR`, `CAD`, `AUD`, `JPY`, etc.
