@@ -99,9 +99,11 @@ prava sessions create \
   --merchant-name "Blue Bottle Coffee" \
   --merchant-url "https://bluebottlecoffee.com" \
   --merchant-country US \
-  --product '{"description":"1x Latte","unit_price":"5.00"}' \
-  --product '{"description":"1x Croissant","unit_price":"3.50"}'
+  --product '{"description":"Latte","unit_price":"5.00","quantity":1}' \
+  --product '{"description":"Croissant","unit_price":"3.50","quantity":1}'
 ```
+
+**Product JSON shape:** `{"description","unit_price","quantity"}`. For multi-unit items use `quantity` — do NOT repeat `--product` flags for the same item or embed counts in the description (e.g. `"2x Latte"`). The `--total-amount` must equal the sum of `unit_price × quantity` across all products.
 
 The command:
 1. Creates the session on the backend.
@@ -136,6 +138,15 @@ Expiry:       12/2028
 
 Do NOT ask the user anything between steps 3 and 4.
 The credentials expire in 30 minutes. Complete checkout immediately.
+
+## Troubleshooting: status stuck on "pending"
+
+If `prava status` returns `pending` after the user says they already approved:
+
+- Do NOT run `prava setup` again — it generates a new keypair and breaks the existing link attempt.
+- Confirm the user opened the exact URL printed by the most recent `prava setup` (not an older one).
+- Check network connectivity — `prava status` falls back to local state when the server is unreachable, which can mask a real approval.
+- If a purchase is pending, run `prava sessions create` as normal — its auto-link-check will detect the approval and proceed without requiring `prava status` to flip first.
 
 ## Important: This is a Payment Subroutine
 
