@@ -1,0 +1,124 @@
+{
+  "cases": [
+    {
+      "id": 1,
+      "prompt": "Buy me a latte from Blue Bottle Coffee.",
+      "expected": "prava-wallet",
+      "category": "wallet-positive"
+    },
+    {
+      "id": 2,
+      "prompt": "Pay my AWS bill, total $127.43.",
+      "expected": "prava-wallet",
+      "category": "wallet-positive"
+    },
+    {
+      "id": 3,
+      "prompt": "Set up Prava on my machine so I can make purchases later.",
+      "expected": "prava-wallet",
+      "category": "wallet-positive"
+    },
+    {
+      "id": 4,
+      "prompt": "Order me 2 large pizzas from Domino's.",
+      "expected": "prava-wallet",
+      "category": "wallet-positive"
+    },
+    {
+      "id": 5,
+      "prompt": "Use Prava to buy a hoodie from Nike.",
+      "expected": "prava-wallet",
+      "category": "wallet-positive"
+    },
+    {
+      "id": 6,
+      "prompt": "I want my AI agent to be able to buy things for me — how do I link my card?",
+      "expected": "prava-wallet",
+      "category": "wallet-adversarial"
+    },
+    {
+      "id": 7,
+      "prompt": "Integrate Prava payments into my Next.js app.",
+      "expected": "prava-sdk-integration",
+      "category": "sdk-positive"
+    },
+    {
+      "id": 8,
+      "prompt": "Add the Prava SDK to my Express server.",
+      "expected": "prava-sdk-integration",
+      "category": "sdk-positive"
+    },
+    {
+      "id": 9,
+      "prompt": "I'm building a SaaS and need to collect cards via the Prava iframe.",
+      "expected": "prava-sdk-integration",
+      "category": "sdk-positive"
+    },
+    {
+      "id": 10,
+      "prompt": "Implement the PravaSDK card form in my React component.",
+      "expected": "prava-sdk-integration",
+      "category": "sdk-positive"
+    },
+    {
+      "id": 11,
+      "prompt": "How do I create a session with my Prava merchant secret key?",
+      "expected": "prava-sdk-integration",
+      "category": "sdk-positive"
+    },
+    {
+      "id": 12,
+      "prompt": "I want my AI application to accept card payments — set up Prava in my Next.js project.",
+      "expected": "prava-sdk-integration",
+      "category": "sdk-adversarial"
+    },
+    {
+      "id": 13,
+      "prompt": "Pay John $50 on Venmo for dinner last night.",
+      "expected": "none",
+      "category": "negative-p2p"
+    },
+    {
+      "id": 14,
+      "prompt": "What's the best payment processor for an ecommerce site?",
+      "expected": "none",
+      "category": "negative-general"
+    },
+    {
+      "id": 15,
+      "prompt": "Send a Slack message to the team about the launch.",
+      "expected": "none",
+      "category": "negative-unrelated"
+    },
+    {
+      "id": 16,
+      "prompt": "Compare Stripe and Prava for my startup.",
+      "expected": "none",
+      "category": "negative-educational"
+    },
+    {
+      "id": 17,
+      "prompt": "What is Prava and how does it work?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    },
+    {
+      "id": 18,
+      "prompt": "Is Prava secure? Where is my card data stored?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    },
+    {
+      "id": 19,
+      "prompt": "What's a passkey and why does Prava use it?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    },
+    {
+      "id": 20,
+      "prompt": "Does Prava work in India or with UPI?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    }
+  ]
+}

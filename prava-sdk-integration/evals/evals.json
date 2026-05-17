@@ -1,0 +1,157 @@
+{
+  "skill_name": "prava-sdk-integration",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Integrate Prava payments into my Next.js 14 App Router app to charge users $20/month for a Pro plan. My keys are pk_test_abc and sk_test_xyz, backend is https://api.prava.space.",
+      "expected_output": "Plan installs SDK, sets env vars correctly (NEXT_PUBLIC_ on publishable key + backend URL only, never on secret key), creates a server action / route handler for session creation using the secret key, mounts the iframe via PravaSDK.collectPAN in a client component, polls payment-result from the server with session_id + Bearer secret key.",
+      "files": [],
+      "expectations": [
+        "Plan runs 'npm install @prava-sdk/core' (or pnpm/yarn equivalent)",
+        "Plan stores MERCHANT_SECRET_KEY in .env.local WITHOUT the NEXT_PUBLIC_ prefix",
+        "Plan stores NEXT_PUBLIC_PUBLISHABLE_KEY with the NEXT_PUBLIC_ prefix (client-safe)",
+        "Plan creates a server-side mechanism (server action, route handler, or API route) that calls POST /v1/sessions using MERCHANT_SECRET_KEY",
+        "Plan mounts PravaSDK.collectPAN on the frontend with onSuccess and onError callbacks",
+        "Plan polls payment-result from the SERVER side using session_id in the URL and Bearer MERCHANT_SECRET_KEY as auth",
+        "Plan does NOT call POST /v1/sessions directly from the browser"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Add Prava to my Express server. My keys are pk_test_xyz, sk_test_abc, backend https://api.prava.space.",
+      "expected_output": "Plan installs SDK, uses non-NEXT_PUBLIC env var names appropriate for Express, creates POST /v1/sessions and GET payment-result routes server-side, returns session_token + iframe_url to the frontend.",
+      "files": [],
+      "expectations": [
+        "Plan installs @prava-sdk/core",
+        "Plan stores the secret key in .env (NOT prefixed with NEXT_PUBLIC_, VITE_, or REACT_APP_)",
+        "Plan creates an Express route handler that calls POST /v1/sessions with the secret key",
+        "Plan returns session_id, session_token, and iframe_url to the frontend in the session response",
+        "Plan does NOT use Next.js-specific patterns (server actions, NEXT_PUBLIC_)",
+        "Plan exposes payment-result polling via a server endpoint (e.g. GET /api/payment-result/:sessionId)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I want to put my Prava secret key in NEXT_PUBLIC_SECRET_KEY so I can call POST /v1/sessions directly from my React component. Show me how.",
+      "expected_output": "Plan REFUSES to put the secret key in client-side vars. Explains the security risk. Provides the correct architecture: secret key server-side only, browser receives session_token from the server.",
+      "files": [],
+      "expectations": [
+        "Plan refuses to put MERCHANT_SECRET_KEY (or any sk_* key) in NEXT_PUBLIC_, VITE_, or REACT_APP_ prefixed env vars",
+        "Plan explains why: the secret key would be exposed in the browser bundle to any user / attacker",
+        "Plan provides the correct alternative architecture: secret key on server, server creates session, browser receives session_token + iframe_url",
+        "Plan does NOT generate any code that puts sk_* in client-side vars or calls POST /v1/sessions from the browser"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I'm getting stale 'pending' responses when polling for payment-result in my Next.js app. The user completed payment in the iframe but my server keeps seeing pending status for a long time.",
+      "expected_output": "Plan diagnoses Next.js fetch caching as the likely cause. Adds ?_t=${Date.now()} cache-buster, cache: 'no-store', and next: { revalidate: 0 } to the fetch options.",
+      "files": [],
+      "expectations": [
+        "Plan identifies Next.js fetch caching / deduplication as a likely cause",
+        "Plan adds a ?_t=${Date.now()} (or similar) query-parameter cache-buster to the polling URL",
+        "Plan adds cache: 'no-store' to the fetch options",
+        "Plan mentions next: { revalidate: 0 } as an additional safeguard",
+        "Plan does NOT suggest the problem is on Prava's backend"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Build a Vanilla JS (no framework) payment page that uses Prava. Keys: pk_test_abc, sk_test_xyz.",
+      "expected_output": "Plan uses @prava-sdk/core in the browser via a bundler or script tag, but session creation MUST still happen server-side (the secret key never enters client code).",
+      "files": [],
+      "expectations": [
+        "Plan installs @prava-sdk/core or includes it via script tag / bundler",
+        "Plan REQUIRES a server-side endpoint to create the session (does NOT call POST /v1/sessions from the browser)",
+        "Plan uses PravaSDK.collectPAN in the browser with the publishable key only",
+        "Plan does NOT embed MERCHANT_SECRET_KEY in any client-side JavaScript, HTML, or build artifact",
+        "Plan describes how to set up the server endpoint (even a minimal Node/Express snippet) in the same plan"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "I'm seeing the Prava SDK get unmounted in React Strict Mode (Next.js dev mode). The iframe never loads on remount.",
+      "expected_output": "Plan diagnoses React Strict Mode double-mount. Uses a hasStarted ref that resets to false in the cleanup function. Calls sdkRef.current?.destroy() in cleanup.",
+      "files": [],
+      "expectations": [
+        "Plan identifies React Strict Mode double-mount as the cause",
+        "Plan uses a `hasStarted` ref (or equivalent guard) to prevent double-init",
+        "Plan resets the guard to false inside the cleanup function so the remount can re-init",
+        "Plan calls sdkRef.current?.destroy() on unmount cleanup"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "I want to integrate Prava but I haven't received my API keys yet. Can you set everything up so I can just paste them in later?",
+      "expected_output": "Plan sets up env vars with placeholder strings (sk_test_YOUR_SECRET_KEY etc.) and tells the user where to obtain the three credentials (publishable key, secret key, backend URL).",
+      "files": [],
+      "expectations": [
+        "Plan creates env var entries with placeholder strings, NOT fabricated real-looking keys",
+        "Plan tells the user they need three credentials: publishable key (pk_*), secret key (sk_*), and backend URL",
+        "Plan tells the user where to obtain them (from Prava during account onboarding)",
+        "Plan does NOT invent or hallucinate real-looking key strings as if they were valid"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "My Next.js card form polls for payment-result, but the parent page also creates a separate session for some reason. Now the iframe pays on one session but my polling never completes. What's wrong?",
+      "expected_output": "Plan diagnoses duplicate session creation. Recommends creating the session ONCE in the parent and passing session_id and session_token as props to the card form.",
+      "files": [],
+      "expectations": [
+        "Plan identifies that two different sessions were created (one in parent, one in card form)",
+        "Plan recommends creating the session ONCE in the parent component",
+        "Plan recommends passing session_id and session_token down as props to the card form",
+        "Plan does NOT suggest the issue is on Prava's backend"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Integrate Prava into my Next.js 14 App Router app. I'm using Tailwind and shadcn/ui. Keys are pk_test_abc and sk_test_xyz.",
+      "expected_output": "Plan acknowledges the project's styling (Tailwind) and component library (shadcn/ui), adapts the UI to use them rather than imposing custom CSS or a different library.",
+      "files": [],
+      "expectations": [
+        "Plan acknowledges the user is on App Router (uses server actions or route handlers, not pages router)",
+        "Plan adapts UI styling to use Tailwind utility classes",
+        "Plan adapts components to use shadcn/ui primitives (Button, Card, etc.) where applicable",
+        "Plan does NOT impose a generic / default UI or use a different styling system"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "I'm using session_token as the Bearer auth when polling payment-result, and it always returns 401. Why?",
+      "expected_output": "Plan identifies the auth mistake: payment-result polling requires MERCHANT_SECRET_KEY as Bearer auth, NOT session_token. Provides corrected fetch with session_id in the URL path.",
+      "files": [],
+      "expectations": [
+        "Plan identifies that using session_token as Bearer auth is incorrect",
+        "Plan instructs to use MERCHANT_SECRET_KEY as Bearer auth instead",
+        "Plan notes that payment-result polling must therefore happen on the SERVER (where the secret key lives), not from the browser",
+        "Plan uses session_id (not session_token) in the URL path"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "What's the difference between the first-time card enrollment flow and the repeat purchase flow with Prava? Do I need different API calls?",
+      "expected_output": "Plan explains: identical session-create API call. Prava auto-detects returning users and shows saved cards. First time: user enters card + registers passkey. Repeat: user picks saved card + verifies passkey.",
+      "files": [],
+      "expectations": [
+        "Plan states the session-create API call is IDENTICAL for both first-time and repeat flows",
+        "Plan explains that Prava automatically detects returning users (no different endpoint needed)",
+        "Plan describes the first-time flow (card entry + passkey registration)",
+        "Plan describes the repeat flow (saved card selection + passkey verification)",
+        "Plan does NOT suggest using a different endpoint or different request parameters for repeat purchases"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "I want the simplest possible Prava integration for my app — no fancy iframe embedding, just send the user somewhere to pay. What's the minimum I need?",
+      "expected_output": "Plan recommends Approach B (open iframe_url in a new tab). Still requires server-side session creation. Doesn't need PravaSDK.collectPAN.",
+      "files": [],
+      "expectations": [
+        "Plan recommends opening the iframe_url in a new tab/window (Approach B), not embedding via SDK",
+        "Plan still REQUIRES a server-side endpoint to create the session",
+        "Plan does NOT use PravaSDK.collectPAN (not needed when redirecting)",
+        "Plan describes how the developer gets the payment credentials back (server-side polling of payment-result)"
+      ]
+    }
+  ]
+}

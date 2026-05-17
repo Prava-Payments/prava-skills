@@ -45,7 +45,7 @@
         "Plan installs CLI if not found (npm install -g @prava-sdk/cli)",
         "Plan runs 'prava status' to check if already linked",
         "Plan runs 'prava setup --name <name>' if not configured",
-        "Plan shows approval URL to user and waits for confirmation",
+        "Plan shows approval URL AND immediately runs 'prava setup poll' to wait for browser approval (does NOT wait for a user chat reply before polling)",
         "Plan does NOT run 'prava sessions create' (user only asked for setup, not a purchase)",
         "Plan confirms setup is complete after approval"
       ]

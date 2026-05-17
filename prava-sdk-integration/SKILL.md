@@ -1,6 +1,6 @@
 ---
 name: prava-sdk-integration
-version: 1.0.0
+version: 1.1.0
 
 description: Integrate Prava's payment SDK into AI applications — securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey (biometric) verification, and poll for one-time payment credentials (network token + dynamic CVV). For AI application integration, not for AI agent CLI usage.
 homepage: https://prava.space
@@ -154,7 +154,7 @@ PRAVA_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 
 **Other frameworks** — use the appropriate env prefix (`VITE_`, `REACT_APP_`, etc.) for client-side variables.
 
-> **CRITICAL SECURITY RULE**: `MERCHANT_SECRET_KEY` must ONLY be used server-side. NEVER expose it in client-side code, environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`, or browser-accessible bundles.
+> **CRITICAL SECURITY RULE**: `MERCHANT_SECRET_KEY` must ONLY be used server-side. NEVER expose it in client-side code, environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`, or browser-accessible bundles. **This applies in EVERY environment — production, staging, development, demo, "just for testing", "quick local mode", or any other framing. There is no exception.** If the user doesn't have a server yet, set up a minimal Node/Express endpoint (5 lines) and run it locally on port 3001 or similar; never put the secret key in HTML, JavaScript, build artifacts, or any other browser-loadable surface.
 
 ### Step 4: Create Server-Side Session Endpoint
 
