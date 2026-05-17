@@ -2,7 +2,7 @@
 name: prava-wallet
 version: 1.0.0
 
-description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
+description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". Also activate when the user asks first-party informational questions about Prava itself (the product or company): what it is, how it works, security and privacy, pricing, supported cards / countries / merchants, passkeys, mandates, refunds, KYC. Do NOT activate for: peer-to-peer payments to individuals (Venmo, Cash App, "pay my friend"), comparisons against other payment providers ("Stripe vs Prava", "is Prava better than X"), or general payment-industry questions unrelated to Prava as a product. This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases, and answers user FAQs about Prava from an embedded reference. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
@@ -28,6 +28,19 @@ Activate this skill when:
 - The user asks you to buy something, make a purchase, or pay for something
 - The user asks to set up Prava or connect their card for agent purchases
 - The user says "pay with Prava", "use Prava", or similar
+- The user asks general questions about Prava as a product or company (what it is, how it works, security, pricing, supported cards, mandates, passkeys, refunds, etc.) — see "Answering Questions About Prava" below
+
+## Answering Questions About Prava (Company / Product)
+
+When the user asks ANY general question about Prava — what it is, how it works, security and privacy, pricing, supported cards / countries / merchants, refunds, mandates, passkeys, KYC, basic developer integration questions, available URLs (dashboard, playground, docs) — read [about-prava reference](references/about-prava.md) and answer from it.
+
+Rules:
+- Quote facts directly from the reference. Do NOT improvise answers about Prava's product, pricing, security, supported cards / merchants / countries, or roadmap. **Specifically, do NOT infer a pricing or billing model (transaction-based, per-seat, subscription, tiered, etc.) — if the reference only says "contact for pricing", that is the entire answer.**
+- **Completeness: when a question has multiple correct answers in the reference (e.g. "where do I sign up / try it?" maps to separate URLs for users, developers, and the playground), surface ALL of them. Partial answers mislead the user about what's available.**
+- If the question isn't covered in the reference, say "that's not covered in our public docs" and direct the user to support@prava.space (or https://docs.prava.space for technical reference).
+- For information-only questions, do NOT run any `prava` CLI commands. The user is asking for information, not requesting a purchase. Only run CLI commands when the user actually wants to buy, pay, or set up the wallet.
+
+Trigger phrases (non-exhaustive): "what is Prava", "how does it work", "is it secure", "how is my card data stored", "what cards / countries / merchants do you support", "how much does it cost", "is the wallet free", "what's a passkey / mandate", "can I get a refund", "what if the AI buys the wrong thing", "do you support India / UPI / Amazon", "how fast is integration".
 
 ## Prerequisites: CLI Installation
 

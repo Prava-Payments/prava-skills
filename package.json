@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
     "eval:wallet": "tsx prava-wallet/evals/run.ts",
+    "eval:wallet:about": "tsx prava-wallet/evals/about-run.ts",
     "eval:sdk": "tsx prava-sdk-integration/evals/run.ts",
     "eval:routing": "tsx evals/routing.ts"
   },

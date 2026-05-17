@@ -95,6 +95,30 @@
       "prompt": "Compare Stripe and Prava for my startup.",
       "expected": "none",
       "category": "negative-educational"
+    },
+    {
+      "id": 17,
+      "prompt": "What is Prava and how does it work?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    },
+    {
+      "id": 18,
+      "prompt": "Is Prava secure? Where is my card data stored?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    },
+    {
+      "id": 19,
+      "prompt": "What's a passkey and why does Prava use it?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
+    },
+    {
+      "id": 20,
+      "prompt": "Does Prava work in India or with UPI?",
+      "expected": "prava-wallet",
+      "category": "wallet-qa"
     }
   ]
 }

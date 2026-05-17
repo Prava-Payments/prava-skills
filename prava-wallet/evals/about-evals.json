@@ -1,0 +1,186 @@
+{
+  "skill_name": "prava-wallet (about-prava Q&A)",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "What is Prava? Explain it to me.",
+      "expected_output": "Answer states Prava is payment infrastructure for agentic commerce / lets AI agents buy on user's behalf, mentions Visa Intelligent Commerce, no improvisation of features not in reference.",
+      "files": [],
+      "expectations": [
+        "Answer describes Prava as payment infrastructure for agentic commerce or AI-agent payments",
+        "Answer mentions that AI agents can make purchases on the user's behalf without leaving the app or touching card data",
+        "Answer mentions Visa Intelligent Commerce (or Visa network) as the underlying infrastructure",
+        "Answer does NOT improvise features, pricing, or capabilities not present in the reference",
+        "Answer does NOT run any prava CLI commands (which prava, prava status, prava setup, etc.)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Is my credit card data safe with Prava? Where is it stored?",
+      "expected_output": "Mentions PCI Level 2 compliance, Skyflow (PCI Level 1) vault, encrypted, never visible to agent/app/Prava in raw form.",
+      "files": [],
+      "expectations": [
+        "Answer states the AI / agent / app never sees raw card details",
+        "Answer mentions Prava is PCI Level 2 compliant",
+        "Answer mentions Skyflow as the PCI Level 1 vault used for card data storage",
+        "Answer states card data is encrypted and isolated",
+        "Answer does NOT improvise additional security claims not in the reference"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What cards does Prava support?",
+      "expected_output": "Visa cards excluding Chase and Ramp. Mastercard / Discover / Amex in progress.",
+      "files": [],
+      "expectations": [
+        "Answer states Visa cards are supported",
+        "Answer explicitly excludes Chase and Ramp",
+        "Answer mentions Mastercard, Discover, and Amex support is in progress (not yet available)",
+        "Answer does NOT claim support for non-Visa cards as currently available"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Do I need to open a bank account or deposit money to use Prava?",
+      "expected_output": "No — Prava is not a bank, holds no funds, user connects an existing card, nothing to top up.",
+      "files": [],
+      "expectations": [
+        "Answer says NO, no bank account or deposit is required",
+        "Answer states Prava is not a bank and holds no funds",
+        "Answer mentions the user connects an existing card"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "What is a passkey and why does Prava use it?",
+      "expected_output": "Device biometrics (Face ID, Touch ID, fingerprint, Windows Hello) verify the user (not the agent) is authorizing each transaction; explicit user approval required for every payment.",
+      "files": [],
+      "expectations": [
+        "Answer describes a passkey as using device biometrics (Face ID, Touch ID, fingerprint, or Windows Hello)",
+        "Answer explains it verifies that the USER (not the agent) is authorizing the transaction",
+        "Answer mentions that explicit user approval is required for every payment since the agent acts on the user's behalf"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "What's a mandate? Can I revoke one?",
+      "expected_output": "Mandate is an ongoing authorization with a spending limit for a recurring use case. Revoke via Activity tab; stops future charges immediately; past transactions unaffected.",
+      "files": [],
+      "expectations": [
+        "Answer defines a mandate as an ongoing authorization with a spending limit for a recurring use case",
+        "Answer gives or references an example (DoorDash, groceries, recurring delivery, etc.)",
+        "Answer explains how to revoke: Activity tab, find the mandate, revoke it",
+        "Answer states revocation stops future charges immediately",
+        "Answer clarifies that past transactions are not affected"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Does Prava work in India? What about UPI?",
+      "expected_output": "Not currently. US only. Expansion planned.",
+      "files": [],
+      "expectations": [
+        "Answer states Prava is NOT currently supported in India",
+        "Answer states UPI is NOT supported",
+        "Answer mentions Prava is currently US-only",
+        "Answer mentions expansion is planned (not promising a date)"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "If I'm not happy with something the agent bought for me, can I get a refund?",
+      "expected_output": "Yes, same as any card purchase. Contact merchant directly via their site or order confirmation. Not via Prava.",
+      "files": [],
+      "expectations": [
+        "Answer says YES, refunds are possible",
+        "Answer says the user must contact the merchant directly (not Prava)",
+        "Answer mentions contacting via merchant site or order confirmation email",
+        "Answer does NOT claim Prava processes refunds itself"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "What if the AI buys the wrong thing? Who's liable?",
+      "expected_output": "Agent confirms product/merchant/amount before purchase. User approves via passkey. Once approved, transaction is final. Liability for wrong approval rests with the user. Prava's role is limited to tokenization + scoped virtual card.",
+      "files": [],
+      "expectations": [
+        "Answer explains the agent confirms product, merchant, and amount with the user BEFORE the purchase",
+        "Answer states once approved via passkey, the transaction is final",
+        "Answer states liability for approving the wrong amount or merchant rests with the user as the approving party",
+        "Answer clarifies Prava's role is limited (tokenization, creating a scoped virtual card) — Prava is NOT liable for browser automation errors"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "How much does Prava cost to use? Is the wallet free for me as a regular user?",
+      "expected_output": "Free for end users, no fees. For developers, contact support or visit prava.space.",
+      "files": [],
+      "expectations": [
+        "Answer states the wallet is FREE for end users",
+        "Answer states there are no fees for end users",
+        "Answer directs developers to contact support@prava.space or visit prava.space for pricing",
+        "Answer does NOT invent a specific developer pricing number not in the reference"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "I'm building an AI app. How fast can I integrate Prava? Do I need to integrate Stripe separately too?",
+      "expected_output": "4–5 lines to start, most teams live in a day, complex setups 2–3 days. NO separate PSP needed — Prava operates at the card network level, works with Stripe / Checkout.com / any PSP.",
+      "files": [],
+      "expectations": [
+        "Answer mentions integration is fast: 4-5 lines of code to get started",
+        "Answer mentions most teams are live in a day; complex setups 2-3 days",
+        "Answer states NO separate Stripe / PSP integration is needed",
+        "Answer explains Prava operates at the Visa card network level, so virtual cards work anywhere Visa is accepted (including Stripe, Checkout.com, etc.)"
+      ]
+    },
+    {
+      "id": 12,
+      "prompt": "Can I use Prava to buy something from Amazon?",
+      "expected_output": "Not yet — authenticated checkouts (Amazon-style logged-in checkout) are not supported. Solution being built. Check docs.prava.space for updates.",
+      "files": [],
+      "expectations": [
+        "Answer states authenticated checkouts (like Amazon) are NOT yet supported",
+        "Answer mentions a solution is being built / in progress",
+        "Answer directs the user to https://docs.prava.space for updates",
+        "Answer does NOT promise a specific timeline or release date"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Where do I sign up for Prava, and where can I try the product?",
+      "expected_output": "Sign up at wallet.prava.space (users) or dashboard.prava.space (developers, free sandbox). Try the UX at playground.prava.space.",
+      "files": [],
+      "expectations": [
+        "Answer mentions https://wallet.prava.space for user sign-up",
+        "Answer mentions https://dashboard.prava.space for developer access / sandbox",
+        "Answer mentions https://playground.prava.space for trying the full UX",
+        "Answer notes the developer sandbox is free / no payment required"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "When is Prava launching in Europe? What new features are you releasing this quarter?",
+      "expected_output": "Should refuse to invent roadmap claims and direct to support / docs.",
+      "files": [],
+      "expectations": [
+        "Answer does NOT invent a specific Europe launch date or timeline",
+        "Answer does NOT invent specific upcoming features or release dates",
+        "Answer explicitly says the information is not covered in public docs (or equivalent phrasing)",
+        "Answer directs the user to support@prava.space or https://docs.prava.space"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "I'd like to use Prava — but first, can you explain what it does and how the security works?",
+      "expected_output": "Should answer the information question (what Prava does + security) and NOT immediately run any prava CLI commands. The question is purely informational.",
+      "files": [],
+      "expectations": [
+        "Answer explains what Prava does (payment infrastructure for agentic commerce, AI-agent purchases)",
+        "Answer covers the security basics (PCI Level 2, Skyflow vault, raw card never visible to agent)",
+        "Answer does NOT run 'which prava', 'prava status', 'prava setup', or any other CLI command — the user only asked for information",
+        "Answer may offer to help the user set up the wallet AFTER answering the question, but does not auto-execute setup"
+      ]
+    }
+  ]
+}
