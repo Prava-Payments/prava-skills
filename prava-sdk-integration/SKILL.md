@@ -1,6 +1,6 @@
 ---
 name: prava-sdk-integration
-version: 1.0.0
+version: 1.1.0
 
 description: Integrate Prava's payment SDK into AI applications — securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey (biometric) verification, and poll for one-time payment credentials (network token + dynamic CVV). For AI application integration, not for AI agent CLI usage.
 homepage: https://prava.space
