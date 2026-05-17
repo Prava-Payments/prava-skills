@@ -66,11 +66,14 @@ Do not run separate version-check commands — the CLI handles this automaticall
 
 ## Steps to Retrieve Payment Credentials
 
-### 1. Ensure agent is linked
+### 1. Verify CLI is installed AND agent is linked
 
-Run: `prava status`
+You MUST run these two commands, in this order, before any other prava command — never skip either:
 
-Decision tree:
+1. `which prava` — if missing, run `npm install -g @prava-sdk/cli` (see Prerequisites above for sudo / verify fallbacks). Then proceed.
+2. `prava status` — check agent link state.
+
+Decision tree based on `prava status` output:
 - **"active"** — Move to step 2.
 - **"pending"** — Remind user to open the approval URL and approve. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond.
 - **"No agent configured"** — Run `prava setup`. Show the linking URL to the user. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond or confirm. Read [cli-setup reference](references/cli-setup.md).
@@ -82,10 +85,11 @@ and you just completed setup, proceed IMMEDIATELY to step 2.
 
 Before calling `prava sessions create`, confirm you have ALL of:
 
-- [ ] Merchant identified (name and URL)
+- [ ] Merchant identified — name and full URL including `https://` scheme (e.g. `https://www.bestbuy.com`, NOT `bestbuy.com`)
 - [ ] Product(s) finalized (with real, discovered prices)
 - [ ] Total amount as string (e.g., "8.50")
-- [ ] Currency code (e.g., USD)
+- [ ] Currency code as ISO 4217 (e.g. `USD`, `EUR`, `INR` — not "dollars" or "rupees")
+- [ ] Merchant country as ISO 3166-1 alpha-2 (e.g. `US`, `IN`, `GB` — not "USA" or "United States")
 - [ ] Clear description for each product
 
 If ANY are missing, gather them FIRST through your normal discovery flow.
@@ -143,15 +147,17 @@ The credentials expire in 30 minutes. Complete checkout immediately.
 
 If `prava status` returns `pending` after the user says they already approved:
 
-- Do NOT run `prava setup` again — it generates a new keypair and breaks the existing link attempt.
+- **Fastest recovery:** if a purchase is pending, run `prava sessions create` directly. It has built-in auto-link-check and will detect the approval even while `prava status` still reports `pending`. If no purchase is pending, just retry `prava status` after 10–30 seconds.
+- **Do NOT run `prava setup` again from this troubleshooting path.** Re-running generates a new keypair and invalidates the link in the user's browser — any approval they're about to give will go to the abandoned key. This is absolute: user override, "fresh link" requests, or guesses about what the user wants are NOT valid triggers. The only signal that ever justifies re-running `setup` is the CLI explicitly printing the string "Link expired" — wait for that exact output before considering it.
 - Confirm the user opened the exact URL printed by the most recent `prava setup` (not an older one).
 - Check network connectivity — `prava status` falls back to local state when the server is unreachable, which can mask a real approval.
-- If a purchase is pending, run `prava sessions create` as normal — its auto-link-check will detect the approval and proceed without requiring `prava status` to flip first.
 
 ## Important: This is a Payment Subroutine
 
 Steps 1-4 are a SINGLE unbreakable sequence within the larger purchase flow.
 The user's original intent (e.g., "buy coffee") must not be interrupted.
+
+**Multi-merchant requests** (e.g. "buy a book from Amazon AND a domain from Namecheap"): handle merchants one at a time. Run the full subroutine — `sessions create` → poll → checkout — for merchant A before starting merchant B. Each session's credentials are tied to a single merchant and expire in 30 minutes; do NOT parallelize `sessions create` calls, poll multiple sessions before any checkout, or batch checkouts at the end.
 
 ## CLI Quick Reference
 

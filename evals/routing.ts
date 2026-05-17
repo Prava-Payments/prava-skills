@@ -12,10 +12,12 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = join(__dirname, "..");
 const CASES_PATH = join(__dirname, "routing.json");
-const RESULTS_DIR = join(__dirname, "results");
-const RESULTS_FILE = join(RESULTS_DIR, "routing.json");
 
 const MODEL = process.env.PRAVA_EVAL_ROUTER_MODEL ?? "claude-opus-4-7";
+
+// Per-model results so cross-model runs don't clobber each other.
+const RESULTS_DIR = join(__dirname, "results");
+const RESULTS_FILE = join(RESULTS_DIR, `routing-${MODEL}.json`);
 const CONCURRENCY = Math.max(
   1,
   Number(process.env.PRAVA_EVAL_CONCURRENCY ?? 4),
