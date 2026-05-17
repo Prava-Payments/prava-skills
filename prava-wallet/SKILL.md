@@ -2,7 +2,7 @@
 name: prava-wallet
 version: 1.0.0
 
-description: Smart wallet for AI agents — link to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated purchases. For open-source or personal AI agent setups like OpenClaw, Hermes, Claude Code. No card details ever exposed to the AI.
+description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
@@ -179,7 +179,7 @@ prava sessions poll --session-id <id>                   # waits for card tokeniz
 - Minor/patch mismatch: warning printed, continues working
 - Major version mismatch: CLI blocks and exits with code 1
 
-If you see a version error, run: `npm update -g @prava-sdk/cli`
+If you see a version error, run: `npm update -g @prava-sdk/cli`, then retry the command that triggered the error. Do not run `prava setup` again unless the user is genuinely setting up for the first time — updating the CLI does not re-link the agent.
 
 ## Anti-Patterns
 

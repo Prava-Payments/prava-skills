@@ -6,7 +6,6 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SKILL_PATH = join(__dirname, "..", "SKILL.md");
 const EVALS_PATH = join(__dirname, "evals.json");
-const RESULTS_DIR = join(__dirname, "results");
 
 const PLANNER_MODEL =
   process.env.PRAVA_EVAL_PLANNER_MODEL ?? "claude-opus-4-7";
@@ -15,6 +14,22 @@ const CONCURRENCY = Math.max(
   1,
   Number(process.env.PRAVA_EVAL_CONCURRENCY ?? 4),
 );
+
+// Results nested by planner model so cross-model runs don't clobber each other.
+const RESULTS_DIR = join(__dirname, "results", PLANNER_MODEL);
+
+// Adaptive thinking is supported on Opus 4.6/4.7 and Sonnet 4.6. Haiku 4.5
+// and older Sonnet do not support it — omit the thinking param for those.
+function supportsAdaptiveThinking(model: string): boolean {
+  return /^claude-(opus-4-[67]|sonnet-4-6)/.test(model);
+}
+
+const plannerThinking = supportsAdaptiveThinking(PLANNER_MODEL)
+  ? { thinking: { type: "adaptive" as const } }
+  : {};
+const judgeThinking = supportsAdaptiveThinking(JUDGE_MODEL)
+  ? { thinking: { type: "adaptive" as const } }
+  : {};
 
 interface EvalCase {
   id: number;
@@ -72,7 +87,7 @@ async function planCase(item: EvalCase): Promise<string> {
   const res = await client.messages.create({
     model: PLANNER_MODEL,
     max_tokens: 16000,
-    thinking: { type: "adaptive" },
+    ...plannerThinking,
     system: [
       {
         type: "text",
@@ -121,7 +136,7 @@ Rules:
   const res = await client.messages.create({
     model: JUDGE_MODEL,
     max_tokens: 16000,
-    thinking: { type: "adaptive" },
+    ...judgeThinking,
     messages: [{ role: "user", content: prompt }],
   });
 

@@ -28,7 +28,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "npm run build",
-    "eval:wallet": "tsx prava-wallet/evals/run.ts"
+    "eval:wallet": "tsx prava-wallet/evals/run.ts",
+    "eval:routing": "tsx evals/routing.ts"
   },
   "dependencies": {
     "commander": "^12.0.0"
