@@ -1,6 +1,6 @@
 ---
 name: prava-wallet
-version: 1.1.0
+version: 1.2.0
 
 description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". Also activate when the user asks first-party informational questions about Prava itself (the product or company) what it is, how it works, security and privacy, pricing, supported cards / countries / merchants, passkeys, mandates, refunds, KYC. Do NOT activate for peer-to-peer payments to individuals (Venmo, Cash App, "pay my friend"), comparisons against other payment providers ("Stripe vs Prava", "is Prava better than X"), or general payment-industry questions unrelated to Prava as a product. This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases, and answers user FAQs about Prava from an embedded reference. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
 homepage: https://prava.space
@@ -89,7 +89,67 @@ You MUST run these two commands, in this order, before any other prava command �
 Decision tree based on `prava status` output:
 - **"active"** — Move to step 2.
 - **"pending"** — Remind user to open the approval URL and approve. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond.
-- **"No agent configured"** — Run `prava setup`. Show the linking URL to the user. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond or confirm. Read [cli-setup reference](references/cli-setup.md).
+- **"No agent configured"** — Run the agent onboarding flow below, then show the linking URL to the user. IMMEDIATELY run `prava setup poll` — do NOT wait for user to respond or confirm. Read [cli-setup reference](references/cli-setup.md).
+
+#### Agent Onboarding (when "No agent configured")
+
+**Platform** — determine automatically from your own identity. Never ask the user.
+
+**Name** — use this priority:
+1. If the user already specified a name in their message (e.g., "set up Prava as my Shopping Bot"), use that name and skip confirmation.
+2. Otherwise, pick the default name from the table below and **confirm before generating the link**:
+   > Linking this agent to Prava as **"Claude Code"**. Want a different name, or should I proceed?
+3. On confirmation (or if the user provides a new name), run `prava setup`.
+
+| If you are                | Default name        | --platform           |
+|---------------------------|---------------------|----------------------|
+| Anthropic Claude Code     | "Claude Code"       | claude-code          |
+| OpenAI Codex CLI          | "Codex"             | codex                |
+| Cursor                    | "Cursor"            | cursor               |
+| Google Gemini CLI         | "Gemini CLI"        | gemini-cli           |
+| Hermes                    | "Hermes"            | hermes               |
+| Aider                     | "Aider"             | aider                |
+| Goose (Block)             | "Goose"             | goose                |
+| GitHub Copilot CLI        | "Copilot CLI"       | copilot-cli          |
+| GitHub Copilot (IDE)      | "GitHub Copilot"    | github-copilot       |
+| Windsurf                  | "Windsurf"          | windsurf             |
+| Cline                     | "Cline"             | cline                |
+| Continue                  | "Continue"          | continue             |
+| Amazon Q Developer        | "Amazon Q"          | amazon-q             |
+| Roo Code                  | "Roo Code"          | roo-code             |
+| Kilo Code                 | "Kilo Code"         | kilo-code            |
+| Sourcegraph Cody          | "Sourcegraph Cody"  | sourcegraph-cody     |
+| Tabnine                   | "Tabnine"           | tabnine              |
+| Augment Code              | "Augment Code"      | augment-code         |
+| Amp                       | "Amp"               | amp                  |
+| Zed                       | "Zed"               | zed                  |
+| Kiro (AWS)                | "Kiro"              | kiro                 |
+| BLACKBOX AI               | "BLACKBOX AI"       | blackbox             |
+| OpenCode                  | "OpenCode"          | opencode             |
+| Qwen Code                 | "Qwen Code"         | qwen-code            |
+| Kimi CLI                  | "Kimi CLI"          | kimi-cli             |
+| Mistral Vibe              | "Mistral Vibe"      | mistral-vibe         |
+| Warp                      | "Warp"              | warp                 |
+| Coro Code                 | "Coro Code"         | coro-code            |
+| Devin                     | "Devin"             | devin                |
+| OpenHands                 | "OpenHands"         | openhands            |
+| Jules (Google)            | "Jules"             | jules                |
+| SWE-Agent                 | "SWE-Agent"         | swe-agent            |
+| Manus                     | "Manus"             | manus                |
+| OpenAI Operator           | "OpenAI Operator"   | openai-operator      |
+| Claude Computer Use       | "Claude Computer Use"| claude-computer-use |
+| Replit Agent              | "Replit Agent"      | replit-agent         |
+| Bolt (StackBlitz)         | "Bolt"              | bolt                 |
+| v0 (Vercel)              | "v0"                | v0                   |
+| Lovable                   | "Lovable"           | lovable              |
+| Unknown / custom agent    | Ask the user        | custom               |
+
+```bash
+prava setup --name "<name>" --platform <platform>
+```
+
+Do NOT prompt the user for platform — it is always automatic.
+Only ask the user for a name if you are in the "custom" fallback (i.e., you genuinely cannot determine your own identity).
 
 IMPORTANT: If the user's original intent was to make a purchase
 and you just completed setup, proceed IMMEDIATELY to step 2.
@@ -175,7 +235,7 @@ The user's original intent (e.g., "buy coffee") must not be interrupted.
 ## CLI Quick Reference
 
 ```bash
-prava setup --name "<name>" [--description "<desc>"]   # prints URL, exits immediately
+prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
 prava setup poll                                        # waits for user to approve the link
 prava status                                            # checks link status (also detects approval)
 prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]   # creates session, prints URL, exits immediately

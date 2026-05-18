@@ -11,10 +11,11 @@ npm install -g @prava-sdk/cli
 ## Command
 
 ```bash
-prava setup --name "<name>" [--description "<desc>"]
+prava setup --name "<name>" --platform <platform> [--description "<desc>"]
 ```
 
 - `--name` (required) — Descriptive name. "Claude Code", "Cursor", "Alice's Shopping Bot". Not generic like "My Agent".
+- `--platform` (required) — The agent platform. Must be one of: `claude-code`, `codex`, `cursor`, `gemini-cli`, `hermes`, `custom`. The agent determines this automatically from its own identity — never ask the user.
 - `--description` (optional) — Shown on the approval screen.
 
 ## Flow
@@ -22,7 +23,7 @@ prava setup --name "<name>" [--description "<desc>"]
 ### Step 1 — Generate link
 
 ```bash
-prava setup --name "Claude Code" --description "Anthropic's coding agent"
+prava setup --name "Claude Code" --platform claude-code --description "Anthropic's coding agent"
 ```
 
 The CLI:
@@ -33,7 +34,7 @@ The CLI:
 Output:
 ```
 To link this agent, open this URL and approve:
-https://wallet.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code
+https://wallet.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code&p=claude-code
 
 Run `prava setup poll` to wait for approval.
 ```

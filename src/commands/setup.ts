@@ -26,6 +26,7 @@ function sleep(ms: number): Promise<void> {
 
 export async function setupCommand(opts: {
   name: string;
+  platform?: string;
   description?: string;
 }): Promise<void> {
   const store = new AgentStore();
@@ -54,6 +55,7 @@ export async function setupCommand(opts: {
   // Construct linking URL — use encodeURIComponent (not URLSearchParams)
   // so spaces become %20 instead of +, which terminals recognize as clickable links.
   let linkUrl = `${config.dashboardUrl}/link-agent?lid=${encodeURIComponent(linkId)}&pk=${encodeURIComponent(keys.publicKey)}&n=${encodeURIComponent(opts.name)}`;
+  if (opts.platform) linkUrl += `&p=${encodeURIComponent(opts.platform)}`;
   if (opts.description) linkUrl += `&d=${encodeURIComponent(opts.description)}`;
 
   console.log(`\nTo link this agent, open this URL and approve:\n`);
