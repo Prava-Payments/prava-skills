@@ -3,37 +3,37 @@
     {
       "id": 1,
       "prompt": "Buy me a latte from Blue Bottle Coffee.",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-positive"
     },
     {
       "id": 2,
       "prompt": "Pay my AWS bill, total $127.43.",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-positive"
     },
     {
       "id": 3,
       "prompt": "Set up Prava on my machine so I can make purchases later.",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-positive"
     },
     {
       "id": 4,
       "prompt": "Order me 2 large pizzas from Domino's.",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-positive"
     },
     {
       "id": 5,
       "prompt": "Use Prava to buy a hoodie from Nike.",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-positive"
     },
     {
       "id": 6,
       "prompt": "I want my AI agent to be able to buy things for me — how do I link my card?",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-adversarial"
     },
     {
@@ -99,25 +99,25 @@
     {
       "id": 17,
       "prompt": "What is Prava and how does it work?",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-qa"
     },
     {
       "id": 18,
       "prompt": "Is Prava secure? Where is my card data stored?",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-qa"
     },
     {
       "id": 19,
       "prompt": "What's a passkey and why does Prava use it?",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-qa"
     },
     {
       "id": 20,
       "prompt": "Does Prava work in India or with UPI?",
-      "expected": "prava-wallet",
+      "expected": "prava-pay",
       "category": "wallet-qa"
     }
   ]

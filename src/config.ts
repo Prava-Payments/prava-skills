@@ -10,7 +10,7 @@ export const config = {
   apiServerUrl: process.env['PRAVA_SERVER_URL'] ?? 'https://api.prava.space',
 
   /** Base URL for the Prava dashboard / wallet UI */
-  dashboardUrl: process.env['PRAVA_DASHBOARD_URL'] ?? 'https://wallet.prava.space',
+  dashboardUrl: process.env['PRAVA_DASHBOARD_URL'] ?? 'https://pay.prava.space',
 
   /** Request timeout in milliseconds */
   requestTimeoutMs: Number(process.env['PRAVA_TIMEOUT_MS'] ?? 30_000),

@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name('prava')
   .description('Prava CLI — smart wallet for AI agents')
-  .version('0.1.3');
+  .version('1.0.0');
 
 const setup = program
   .command('setup')

@@ -5,7 +5,7 @@ dist/
 .DS_Store
 testing-flow/
 docs/
-prava-wallet/evals/results/
-prava-wallet/evals/results-about/
+prava-pay/evals/results/
+prava-pay/evals/results-about/
 prava-sdk-integration/evals/results/
 evals/results/

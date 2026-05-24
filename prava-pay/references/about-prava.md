@@ -18,7 +18,7 @@ Built on Visa's Intelligent Commerce infrastructure. Prava handles tokenization,
 - Documentation: https://docs.prava.space
 - Playground (try the UX): https://playground.prava.space
 - Developer Dashboard (free sandbox): https://dashboard.prava.space
-- Wallet (user sign-up): https://wallet.prava.space
+- Prava Pay (user sign-up): https://pay.prava.space
 - Security: https://prava.space/security
 - Support: support@prava.space
 - Privacy Policy: https://prava.space/privacypolicy
@@ -31,7 +31,7 @@ Built on Visa's Intelligent Commerce infrastructure. Prava handles tokenization,
 **What is Prava Wallet?** A consumer wallet that lets AI agents make purchases on the user's behalf using their existing card. The user connects a card once, authorizes an agent, and the agent can transact for them. Every purchase is scoped to a specific merchant and amount, and requires explicit approval before anything is charged.
 
 **Setup steps:**
-1. Sign up at https://wallet.prava.space
+1. Sign up at https://pay.prava.space
 2. Copy the installation skill prompt from the dashboard
 3. Paste it into the AI agent's chat
 4. Type the setup instruction shown (e.g. "Help me set up my wallet")

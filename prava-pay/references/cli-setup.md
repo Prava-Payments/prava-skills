@@ -28,13 +28,13 @@ prava setup --name "Claude Code" --platform claude-code --description "Anthropic
 
 The CLI:
 - Generates a secure Ed25519 keypair locally
-- Prints a linking URL pointing to `wallet.prava.space`
+- Prints a linking URL pointing to `pay.prava.space`
 - **Exits immediately** (does NOT block)
 
 Output:
 ```
 To link this agent, open this URL and approve:
-https://wallet.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code&p=claude-code
+https://pay.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code&p=claude-code
 
 Run `prava setup poll` to wait for approval.
 ```

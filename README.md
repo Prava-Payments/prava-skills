@@ -15,13 +15,13 @@ Each skill includes:
 
 | Skill | Audience | Description |
 |-------|----------|-------------|
-| [`prava-wallet`](./prava-wallet/) | **AI Agents** | Smart wallet for AI agents. Link to a user's Prava account, create payment sessions, and retrieve tokenized credentials (Visa network token + dynamic CVV) for agent-initiated purchases. For open-source or personal AI agent setups like OpenClaw, Hermes, Claude Code. |
+| [`prava-pay`](./prava-pay/) | **AI Agents** | Smart wallet for AI agents. Link to a user's Prava account, create payment sessions, and retrieve tokenized credentials (Visa network token + dynamic CVV) for agent-initiated purchases. For open-source or personal AI agent setups like OpenClaw, Hermes, Claude Code. |
 | [`prava-sdk-integration`](./prava-sdk-integration/) | **AI Applications** | Integrate Prava's payment SDK into AI applications. Securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey verification. Includes templates for Next.js, Express, and Vanilla JS. |
 
 ## Repository Structure
 
 ```
-prava-wallet/                      # Skill for AI agents (CLI-based)
+prava-pay/                      # Skill for AI agents (CLI-based)
 ├── SKILL.md                       # Main skill instructions
 ├── evals/
 │   └── evals.json                 # Skill evaluation test cases
@@ -59,7 +59,7 @@ Or install a specific skill:
 
 ```bash
 # Prava wallet skill
-npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-wallet --global --yes
+npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-pay --global --yes
 
 # AI application SDK integration skill
 npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-sdk-integration --global --yes

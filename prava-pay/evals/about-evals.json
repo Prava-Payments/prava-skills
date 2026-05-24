@@ -1,5 +1,5 @@
 {
-  "skill_name": "prava-wallet (about-prava Q&A)",
+  "skill_name": "prava-pay (about-prava Q&A)",
   "evals": [
     {
       "id": 1,
@@ -149,10 +149,10 @@
     {
       "id": 13,
       "prompt": "Where do I sign up for Prava, and where can I try the product?",
-      "expected_output": "Sign up at wallet.prava.space (users) or dashboard.prava.space (developers, free sandbox). Try the UX at playground.prava.space.",
+      "expected_output": "Sign up at pay.prava.space (users) or dashboard.prava.space (developers, free sandbox). Try the UX at playground.prava.space.",
       "files": [],
       "expectations": [
-        "Answer mentions https://wallet.prava.space for user sign-up",
+        "Answer mentions https://pay.prava.space for user sign-up",
         "Answer mentions https://dashboard.prava.space for developer access / sandbox",
         "Answer mentions https://playground.prava.space for trying the full UX",
         "Answer notes the developer sandbox is free / no payment required"

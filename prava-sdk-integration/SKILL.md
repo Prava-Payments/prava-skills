@@ -22,7 +22,7 @@ tags:
 
 This skill teaches AI coding agents how to integrate Prava payments into any AI application using the `@prava-sdk/core` npm package and Prava REST API.
 
-> **Looking for the AI agent CLI flow?** That's a separate skill: `prava-wallet`. This skill is for AI applications integrating Prava into their web apps.
+> **Looking for the AI agent CLI flow?** That's a separate skill: `prava-pay`. This skill is for AI applications integrating Prava into their web apps.
 
 ---
 

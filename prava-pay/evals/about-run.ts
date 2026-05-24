@@ -74,7 +74,7 @@ const evalsFile: EvalsFile = JSON.parse(readFileSync(EVALS_PATH, "utf-8"));
 const ANSWER_INSTRUCTION = `
 ---
 
-You are an AI agent that has loaded the prava-wallet skill (above) AND its about-prava reference file. The user message that follows is a question about Prava (the company / product) — NOT a request to make a purchase.
+You are an AI agent that has loaded the prava-pay skill (above) AND its about-prava reference file. The user message that follows is a question about Prava (the company / product) — NOT a request to make a purchase.
 
 Answer the user's question directly and concisely, using the SKILL.md and reference content. Do NOT improvise facts not present in the reference. Do NOT run any \`prava\` CLI commands (the user is asking for information, not requesting a purchase). If the information isn't covered, say so plainly and direct the user to support@prava.space or https://docs.prava.space.
 
