@@ -1,6 +1,6 @@
 ---
 name: prava-pay
-version: 3.0.0
+version: 2.1.0
 
 description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". Also activate when the user asks first-party informational questions about Prava itself (the product or company) what it is, how it works, security and privacy, pricing, supported cards / countries / merchants, passkeys, mandates, refunds, KYC. Do NOT activate for peer-to-peer payments to individuals (Venmo, Cash App, "pay my friend"), comparisons against other payment providers ("Stripe vs Prava", "is Prava better than X"), or general payment-industry questions unrelated to Prava as a product. This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases, and answers user FAQs about Prava from an embedded reference. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
 homepage: https://prava.space
@@ -221,7 +221,7 @@ The credentials expire in 30 minutes. Complete checkout immediately.
 
 ## Troubleshooting: status stuck on "pending"
 
-The "stuck pending" failure mode has been eliminated in CLI 3.0+ / skill 3.0+: `prava status` now returns either `Link expired` (when the previous setup is past its 15-minute TTL) or a `Link: <URL>` line you can re-show the user (when still fresh). The decision tree above handles both. The notes below cover legacy CLI versions only:
+The "stuck pending" failure mode has been eliminated in CLI 1.1+ / skill 2.1+: `prava status` now returns either `Link expired` (when the previous setup is past its 15-minute TTL) or a `Link: <URL>` line you can re-show the user (when still fresh). The decision tree above handles both. The notes below cover legacy CLI versions only:
 
 - If you're stuck because the CLI does NOT print `Link expired` but the user can't find the URL, ask the user to upgrade: `npm update -g @prava-sdk/cli`. After the upgrade, `prava status` will either re-print the URL or return `Link expired`.
 - **Do NOT run `prava setup` again from a troubleshooting path without confirming with the user.** Re-running rotates the keypair and invalidates any link the user might still be about to approve. The exceptions are: (1) the CLI explicitly prints `Link expired`, OR (2) the user confirms in this session that they want a fresh link.

@@ -16,7 +16,7 @@ No agent configured. Run: prava setup --name "<name>"
 
 Exit code: 2
 
-### Pending — link still fresh, URL re-printed (CLI 3.0+)
+### Pending — link still fresh, URL re-printed (CLI 1.1+)
 
 ```
 Agent:   Claude Code
@@ -36,7 +36,7 @@ Link:    Waiting for approval.
 
 Exit code: 2
 
-### Expired — previous setup is past TTL (CLI 3.0+)
+### Expired — previous setup is past TTL (CLI 1.1+)
 
 ```
 Link expired. Run `prava setup` again.
