@@ -95,7 +95,20 @@ export async function setupPollCommand(): Promise<void> {
     process.exit(0);
   }
 
+  // Fail fast if the link is locally past TTL — no point spinning the poll loop.
+  if (data.linkCreatedAt && Date.now() - Date.parse(data.linkCreatedAt) > POLL_MAX_WAIT_MS) {
+    console.error('Link expired. Run `prava setup` again.');
+    process.exit(2);
+  }
+
   console.log(`Waiting for approval of "${data.name}"...`);
+
+  // Prefer the full signed query string so the server can return `expired`
+  // even if the CLI's local clock is wrong.
+  const queryString = data.linkUrl
+    ? data.linkUrl.split('?')[1]
+    : `lid=${encodeURIComponent(data.linkId)}`;
+  const statusPath = `/v1/agents/link/status?${queryString}`;
 
   const startTime = Date.now();
   let interval = POLL_INITIAL_INTERVAL_MS;
@@ -104,33 +117,43 @@ export async function setupPollCommand(): Promise<void> {
     await sleep(interval);
     process.stdout.write('.');
 
+    let response;
     try {
-      const response = await client.request<{
+      response = await client.request<{
         status: string;
         agent_id?: string;
       }>({
         method: 'GET',
-        path: `/v1/agents/link/status?lid=${data.linkId}`,
+        path: statusPath,
       });
-
-      if (response.data.status === 'approved' && response.data.agent_id) {
-        data.linked = true;
-        data.agentId = response.data.agent_id;
-        data.linkedAt = new Date().toISOString();
-        store.save(data);
-
-        console.log(`\n\nLinked! Agent ID: ${response.data.agent_id}`);
-        console.log('Ready to create sessions.');
-        return;
-      }
     } catch {
-      // Network error — continue polling
+      // Network error — keep polling. The catch is narrowed to the request
+      // itself so the approved/expired handlers below can call process.exit
+      // without being swallowed.
+      interval = Math.min(interval * 1.5, 20_000);
+      continue;
+    }
+
+    if (response.data.status === 'approved' && response.data.agent_id) {
+      data.linked = true;
+      data.agentId = response.data.agent_id;
+      data.linkedAt = new Date().toISOString();
+      store.save(data);
+
+      console.log(`\n\nLinked! Agent ID: ${response.data.agent_id}`);
+      console.log('Ready to create sessions.');
+      return;
+    }
+
+    if (response.data.status === 'expired') {
+      console.error('\nLink expired. Run `prava setup` again.');
+      process.exit(2);
     }
 
     // Exponential backoff: 3s → 4.5s → 6.75s → ... cap at 20s
     interval = Math.min(interval * 1.5, 20_000);
   }
 
-  console.log(`\n\nLink expired. Run \`prava setup\` again.`);
-  process.exit(1);
+  console.error('\nLink expired. Run `prava setup` again.');
+  process.exit(2);
 }
