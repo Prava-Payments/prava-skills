@@ -14,6 +14,7 @@
 import { AgentStore } from '../storage/agent-store.js';
 import { generateKeyPair } from '../crypto/keys.js';
 import { generateLinkId } from '../crypto/link-id.js';
+import { signLinkParams } from '../crypto/link-sig.js';
 import { PravaClient } from '../http/client.js';
 import { config } from '../config.js';
 
@@ -38,11 +39,29 @@ export async function setupCommand(opts: {
     process.exit(0);
   }
 
-  // Generate keypair and link ID
+  // Generate keypair, link ID, and signed timestamp
   const keys = generateKeyPair();
   const linkId = generateLinkId();
+  const iat = Math.floor(Date.now() / 1000);
+  const platform = opts.platform ?? '';
+  const description = opts.description ?? '';
 
-  // Store locally
+  const sig = signLinkParams(keys.privateKey, {
+    lid: linkId,
+    pk: keys.publicKey,
+    name: opts.name,
+    platform,
+    description,
+    iat,
+  });
+
+  // Construct linking URL — encodeURIComponent so spaces become %20 (terminal-clickable).
+  let linkUrl = `${config.dashboardUrl}/link-agent?lid=${encodeURIComponent(linkId)}&pk=${encodeURIComponent(keys.publicKey)}&n=${encodeURIComponent(opts.name)}`;
+  if (opts.platform) linkUrl += `&p=${encodeURIComponent(opts.platform)}`;
+  if (opts.description) linkUrl += `&d=${encodeURIComponent(opts.description)}`;
+  linkUrl += `&iat=${iat}&sig=${sig}`;
+
+  // Persist state (including the URL and timestamp) BEFORE printing.
   store.save({
     privateKey: keys.privateKey,
     publicKey: keys.publicKey,
@@ -50,17 +69,14 @@ export async function setupCommand(opts: {
     name: opts.name,
     description: opts.description,
     linked: false,
+    linkCreatedAt: new Date(iat * 1000).toISOString(),
+    linkUrl,
   });
-
-  // Construct linking URL — use encodeURIComponent (not URLSearchParams)
-  // so spaces become %20 instead of +, which terminals recognize as clickable links.
-  let linkUrl = `${config.dashboardUrl}/link-agent?lid=${encodeURIComponent(linkId)}&pk=${encodeURIComponent(keys.publicKey)}&n=${encodeURIComponent(opts.name)}`;
-  if (opts.platform) linkUrl += `&p=${encodeURIComponent(opts.platform)}`;
-  if (opts.description) linkUrl += `&d=${encodeURIComponent(opts.description)}`;
 
   console.log(`\nTo link this agent, open this URL and approve:\n`);
   console.log(linkUrl);
-  console.log(`\nRun \`prava setup poll\` to wait for approval.`);
+  console.log(`\nLink expires in 15 minutes.`);
+  console.log(`Run \`prava setup poll\` to wait for approval.`);
 }
 
 export async function setupPollCommand(): Promise<void> {
