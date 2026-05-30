@@ -4,11 +4,13 @@
  * Reads ~/.prava/agent.json and reports the current state.
  * If linked, verifies with the server via GET /v1/agents/link/me.
  *
- * Exit codes: 0 = active, 2 = not configured or not linked
+ * Exit codes: 0 = active, 2 = not configured / pending / link expired
  */
 
 import { AgentStore } from '../storage/agent-store.js';
 import { PravaClient } from '../http/client.js';
+
+const LINK_TTL_MS = 15 * 60 * 1000;
 
 export async function statusCommand(): Promise<void> {
   const store = new AgentStore();
@@ -20,16 +22,29 @@ export async function statusCommand(): Promise<void> {
     process.exit(2);
   }
 
-  // Pending (not yet approved) — check server in case user approved since last check
+  // Local-expiry check runs BEFORE any network call so the user sees the
+  // canonical "Link expired" string even when offline. The skill's
+  // troubleshooting branch literally watches for this string.
+  if (!data.linked && data.linkCreatedAt) {
+    const ageMs = Date.now() - Date.parse(data.linkCreatedAt);
+    if (ageMs > LINK_TTL_MS) {
+      console.error('Link expired. Run `prava setup` again.');
+      process.exit(2);
+    }
+  }
+
+  // Pending — check server in case user approved since last check (or in case
+  // the server has already flipped the link to expired/denied).
   if (!data.linked) {
     const client = new PravaClient();
+
     try {
       const response = await client.request<{
         status: string;
         agent_id?: string;
       }>({
         method: 'GET',
-        path: `/v1/agents/link/status?lid=${data.linkId}`,
+        path: `/v1/agents/link/status?lid=${encodeURIComponent(data.linkId)}`,
       });
 
       if (response.data.status === 'approved' && response.data.agent_id) {
@@ -37,16 +52,26 @@ export async function statusCommand(): Promise<void> {
         data.agentId = response.data.agent_id;
         data.linkedAt = new Date().toISOString();
         store.save(data);
-        // Fall through to the linked branch below
+        // Fall through to the linked branch below.
+      } else if (response.data.status === 'denied') {
+        console.error('Setup denied by user.');
+        process.exit(2);
+      } else if (response.data.status === 'expired') {
+        console.error('Link expired. Run `prava setup` again.');
+        process.exit(2);
       }
     } catch {
-      // Network error — report as pending
+      // Network error — fall through to local pending output.
     }
 
     if (!data.linked) {
       console.log(`Agent:   ${data.name}`);
       console.log(`Status:  pending`);
-      console.log(`Link:    Waiting for approval.`);
+      if (data.linkUrl) {
+        console.log(`Link:    ${data.linkUrl}`);
+      } else {
+        console.log(`Link:    Waiting for approval.`);
+      }
       process.exit(2);
     }
   }

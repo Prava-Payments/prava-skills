@@ -19,17 +19,24 @@ export interface AgentData {
   linked: boolean;
   agentId?: string;
   linkedAt?: string;
+  /** ISO timestamp of when the linking URL was generated. Used by `prava status` for local-first expiry detection. */
+  linkCreatedAt?: string;
+  /** The full linking URL, preserved so `prava status` can re-print it on pending. */
+  linkUrl?: string;
 }
 
-const DEFAULT_DIR = join(homedir(), '.prava');
 const FILE_NAME = 'agent.json';
+
+function defaultDir(): string {
+  return process.env.PRAVA_STATE_DIR ?? join(homedir(), '.prava');
+}
 
 export class AgentStore {
   private filePath: string;
   private dir: string;
 
   constructor(dir?: string) {
-    this.dir = dir ?? DEFAULT_DIR;
+    this.dir = dir ?? defaultDir();
     this.filePath = join(this.dir, FILE_NAME);
   }
 
