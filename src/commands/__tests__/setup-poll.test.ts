@@ -3,11 +3,12 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// Auto-hoisted: applies to all imports below.
+// Controllable mock response — set per test before calling setupPollCommand.
+const mockState = vi.hoisted(() => ({ status: 'expired' as string }));
 vi.mock('../../http/client.js', () => ({
   PravaClient: class {
     async request() {
-      return { status: 200, data: { status: 'expired' } };
+      return { status: 200, data: { status: mockState.status } };
     }
   },
 }));
@@ -49,6 +50,7 @@ describe('setupPollCommand', () => {
     console.error = origErr;
     process.stdout.write = origWrite;
     exitSpy.mockRestore();
+    mockState.status = 'expired';
     rmSync(dir, { recursive: true, force: true });
     delete process.env.PRAVA_STATE_DIR;
   });
@@ -68,17 +70,32 @@ describe('setupPollCommand', () => {
   });
 
   it('exits 2 with "Link expired" when server returns expired', async () => {
+    mockState.status = 'expired';
     new AgentStore(dir).save({
       privateKey: 'p',
       publicKey: 'pk',
-      linkId: 'lk_x',
+      linkId: 'lk_xxxxxxxxxxx',
       name: 'Claude Code',
       linked: false,
       linkCreatedAt: new Date(Date.now() - 60 * 1000).toISOString(),
-      linkUrl:
-        'https://pay.prava.space/link-agent?lid=lk_x&pk=pk&n=Claude%20Code&p=claude-code&iat=1&sig=abc',
+      linkUrl: 'https://pay.prava.space/link-agent?lid=lk_xxxxxxxxxxx',
     });
     await expect(setupPollCommand()).rejects.toThrow('EXIT_2');
     expect(errs.join('\n')).toMatch(/Link expired\. Run `prava setup` again\./);
+  }, 15_000);
+
+  it('exits 2 with "Setup denied by user." when server returns denied', async () => {
+    mockState.status = 'denied';
+    new AgentStore(dir).save({
+      privateKey: 'p',
+      publicKey: 'pk',
+      linkId: 'lk_denied12345',
+      name: 'Claude Code',
+      linked: false,
+      linkCreatedAt: new Date(Date.now() - 60 * 1000).toISOString(),
+      linkUrl: 'https://pay.prava.space/link-agent?lid=lk_denied12345',
+    });
+    await expect(setupPollCommand()).rejects.toThrow('EXIT_2');
+    expect(errs.join('\n')).toMatch(/Setup denied by user\./);
   }, 15_000);
 });

@@ -34,13 +34,9 @@ export async function statusCommand(): Promise<void> {
   }
 
   // Pending — check server in case user approved since last check (or in case
-  // the server has already flipped the link to expired due to clock skew).
+  // the server has already flipped the link to expired/denied).
   if (!data.linked) {
     const client = new PravaClient();
-    // Prefer the full signed query string so the server can return `expired`.
-    const queryString = data.linkUrl
-      ? data.linkUrl.split('?')[1]
-      : `lid=${encodeURIComponent(data.linkId)}`;
 
     try {
       const response = await client.request<{
@@ -48,7 +44,7 @@ export async function statusCommand(): Promise<void> {
         agent_id?: string;
       }>({
         method: 'GET',
-        path: `/v1/agents/link/status?${queryString}`,
+        path: `/v1/agents/link/status?lid=${encodeURIComponent(data.linkId)}`,
       });
 
       if (response.data.status === 'approved' && response.data.agent_id) {
@@ -57,6 +53,9 @@ export async function statusCommand(): Promise<void> {
         data.linkedAt = new Date().toISOString();
         store.save(data);
         // Fall through to the linked branch below.
+      } else if (response.data.status === 'denied') {
+        console.error('Setup denied by user.');
+        process.exit(2);
       } else if (response.data.status === 'expired') {
         console.error('Link expired. Run `prava setup` again.');
         process.exit(2);

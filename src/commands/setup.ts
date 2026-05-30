@@ -13,8 +13,7 @@
 
 import { AgentStore } from '../storage/agent-store.js';
 import { generateKeyPair } from '../crypto/keys.js';
-import { generateLinkId } from '../crypto/link-id.js';
-import { signLinkParams } from '../crypto/link-sig.js';
+import { signCreateParams } from '../crypto/link-sig.js';
 import { PravaClient } from '../http/client.js';
 import { config } from '../config.js';
 
@@ -39,15 +38,14 @@ export async function setupCommand(opts: {
     process.exit(0);
   }
 
-  // Generate keypair, link ID, and signed timestamp
+  // Generate keypair and sign a lid-less create request. The backend issues
+  // the link id; the signature proves we hold the private key for this pk.
   const keys = generateKeyPair();
-  const linkId = generateLinkId();
   const iat = Math.floor(Date.now() / 1000);
   const platform = opts.platform ?? '';
   const description = opts.description ?? '';
 
-  const sig = signLinkParams(keys.privateKey, {
-    lid: linkId,
+  const sig = signCreateParams(keys.privateKey, {
     pk: keys.publicKey,
     name: opts.name,
     platform,
@@ -55,17 +53,56 @@ export async function setupCommand(opts: {
     iat,
   });
 
-  // Construct linking URL — encodeURIComponent so spaces become %20 (terminal-clickable).
-  let linkUrl = `${config.dashboardUrl}/link-agent?lid=${encodeURIComponent(linkId)}&pk=${encodeURIComponent(keys.publicKey)}&n=${encodeURIComponent(opts.name)}`;
-  if (opts.platform) linkUrl += `&p=${encodeURIComponent(opts.platform)}`;
-  if (opts.description) linkUrl += `&d=${encodeURIComponent(opts.description)}`;
-  linkUrl += `&iat=${iat}&sig=${sig}`;
+  // Register the pending link with the backend → returns the server-issued lid.
+  const client = new PravaClient();
+  let lid: string;
+  try {
+    const res = await client.request<{
+      lid?: string;
+      expires_at?: string;
+      error?: { code?: string; message?: string };
+    }>({
+      method: 'POST',
+      path: '/v1/agents/link/create',
+      body: {
+        public_key: keys.publicKey,
+        name: opts.name,
+        platform: opts.platform,
+        description: opts.description,
+        iat,
+        sig,
+      },
+    });
 
-  // Persist state (including the URL and timestamp) BEFORE printing.
+    if (res.status >= 400 || !res.data.lid) {
+      const code = res.data.error?.code;
+      if (code === 'LINK_EXPIRED' || code === 'LINK_FUTURE_IAT') {
+        console.error(
+          'Your system clock appears to be incorrect. Please sync your clock and retry.',
+        );
+      } else {
+        console.error(
+          `Failed to create link${res.data.error?.message ? `: ${res.data.error.message}` : ` (HTTP ${res.status})`}.`,
+        );
+      }
+      process.exit(1);
+    }
+    lid = res.data.lid;
+  } catch {
+    console.error(
+      'Could not reach the Prava server to create a link. Check your connection and retry.',
+    );
+    process.exit(1);
+  }
+
+  // Short linking URL — just the opaque lid.
+  const linkUrl = `${config.dashboardUrl}/link-agent?lid=${encodeURIComponent(lid)}`;
+
+  // Persist state BEFORE printing.
   store.save({
     privateKey: keys.privateKey,
     publicKey: keys.publicKey,
-    linkId,
+    linkId: lid,
     name: opts.name,
     description: opts.description,
     linked: false,
@@ -103,12 +140,8 @@ export async function setupPollCommand(): Promise<void> {
 
   console.log(`Waiting for approval of "${data.name}"...`);
 
-  // Prefer the full signed query string so the server can return `expired`
-  // even if the CLI's local clock is wrong.
-  const queryString = data.linkUrl
-    ? data.linkUrl.split('?')[1]
-    : `lid=${encodeURIComponent(data.linkId)}`;
-  const statusPath = `/v1/agents/link/status?${queryString}`;
+  // The lid is the only thing the status endpoint needs now.
+  const statusPath = `/v1/agents/link/status?lid=${encodeURIComponent(data.linkId)}`;
 
   const startTime = Date.now();
   let interval = POLL_INITIAL_INTERVAL_MS;
@@ -143,6 +176,11 @@ export async function setupPollCommand(): Promise<void> {
       console.log(`\n\nLinked! Agent ID: ${response.data.agent_id}`);
       console.log('Ready to create sessions.');
       return;
+    }
+
+    if (response.data.status === 'denied') {
+      console.error('\nSetup denied by user.');
+      process.exit(2);
     }
 
     if (response.data.status === 'expired') {

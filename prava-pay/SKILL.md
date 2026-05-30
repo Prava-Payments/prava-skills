@@ -1,6 +1,6 @@
 ---
 name: prava-pay
-version: 2.1.0
+version: 2.2.0
 
 description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". Also activate when the user asks first-party informational questions about Prava itself (the product or company) what it is, how it works, security and privacy, pricing, supported cards / countries / merchants, passkeys, mandates, refunds, KYC. Do NOT activate for peer-to-peer payments to individuals (Venmo, Cash App, "pay my friend"), comparisons against other payment providers ("Stripe vs Prava", "is Prava better than X"), or general payment-industry questions unrelated to Prava as a product. This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases, and answers user FAQs about Prava from an embedded reference. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
 homepage: https://prava.space
@@ -73,7 +73,15 @@ prava --version
 The CLI automatically checks for updates on every API call. Watch for two notices in command output:
 
 - **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
-- **Skill update notice** — Run `npx skills update prava-pay -g` to get the latest skill instructions. Do this before continuing with any payment flow.
+- **Skill update notice** — "Skill update required (minimum: X.Y.Z)". **Compare `X.Y.Z` to this skill's own `version:` (frontmatter). If your version is ≥ `X.Y.Z`, IGNORE it — you're current.** Only if your version is actually below `X.Y.Z` should you run `npx skills update prava-pay -g` before continuing.
+
+**Always run `prava` with the `PRAVA_SKILL_VERSION` env var set to this skill's version** (from the frontmatter) so the CLI can verify skill compatibility and stay silent when you're current. Prefix every `prava` invocation, e.g.:
+
+```bash
+PRAVA_SKILL_VERSION=<this skill's version> prava status
+```
+
+If you forget the prefix, the CLI may print the skill-update notice even when you're current — that's why the compare rule above is the backstop.
 
 Do not run separate version-check commands — the CLI handles this automatically.
 
@@ -88,7 +96,7 @@ You MUST run these two commands, in this order, before any other prava command �
 
 Decision tree based on `prava status` output (check in this order — first matching condition wins):
 
-- **CLI prints "Skill update required (minimum: X.Y.Z)"** — hard block. Do NOT act on any other field of the output. Run `npx skills update prava-pay -g`. Then run `prava status` again. If the SAME warning re-prints, the updated skill is not loaded in this session — tell the user: "I've updated the prava-pay skill, but most agent hosts only load skills at session start. Please restart your agent session (the host you're running in — for example Claude Code, Cursor, Codex, or whichever it is), then re-run your original request." Then STOP — do not proceed. (Do NOT say "restart the CLI" or "restart your machine" — it's the agent host process that needs to reload the skill.)
+- **CLI prints "Skill update required (minimum: X.Y.Z)"** — FIRST compare `X.Y.Z` against THIS skill's own version (the `version:` field in the frontmatter at the top of this file). **If this skill's version is greater than or equal to `X.Y.Z`, the warning is a false positive — IGNORE it completely and continue with the next matching condition below. You are already current.** Only if this skill's version is genuinely BELOW `X.Y.Z` is it a hard block: run `npx skills update prava-pay -g`, then run `prava status` again. If the SAME warning re-prints AND your version is still below `X.Y.Z`, the updated skill is not loaded in this session — tell the user: "I've updated the prava-pay skill, but most agent hosts only load skills at session start. Please restart your agent session (the host you're running in — for example Claude Code, Cursor, Codex, or whichever it is), then re-run your original request." Then STOP — do not proceed. (Do NOT say "restart the CLI" or "restart your machine" — it's the agent host process that needs to reload the skill.)
 - **"Link expired. Run `prava setup` again."** — the previous setup link is dead. Confirm with the user that they want a fresh setup link (one sentence: "The previous link expired. I'll generate a new one — confirm?"). On confirmation, run `prava setup --name "<name>" --platform <platform>` then IMMEDIATELY `prava setup poll`.
 - **"active"** — Move to step 2.
 - **"pending"** — A previous setup attempt is still pending and not expired. The CLI re-prints the link as `Link: <URL>` in this case. Show the URL to the user and IMMEDIATELY run `prava setup poll`. If the CLI does NOT include a URL on the `Link:` line (only "Waiting for approval."), the previous link is unrecoverable: confirm with the user once ("I see an unfinished setup attempt with no recoverable link. Generate a fresh one?"), then run `prava setup` to generate a new link.
@@ -238,12 +246,14 @@ The user's original intent (e.g., "buy coffee") must not be interrupted.
 
 ## CLI Quick Reference
 
+Prefix every command with `PRAVA_SKILL_VERSION=<this skill's version>` (from the frontmatter) so the CLI can verify skill compatibility and stay quiet when you're current:
+
 ```bash
-prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
-prava setup poll                                        # waits for user to approve the link
-prava status                                            # checks link status (also detects approval)
-prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]   # creates session, prints URL, exits immediately
-prava sessions poll --session-id <id>                   # waits for card tokenization
+PRAVA_SKILL_VERSION=<ver> prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
+PRAVA_SKILL_VERSION=<ver> prava setup poll                                        # waits for user to approve the link
+PRAVA_SKILL_VERSION=<ver> prava status                                            # checks link status (also detects approval)
+PRAVA_SKILL_VERSION=<ver> prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]   # creates session, prints URL, exits immediately
+PRAVA_SKILL_VERSION=<ver> prava sessions poll --session-id <id>                   # waits for card tokenization
 ```
 
 ## Output Contract
@@ -261,7 +271,7 @@ prava sessions poll --session-id <id>                   # waits for card tokeniz
 **Version check:** The Prava backend may require a minimum CLI version, and the CLI may require a minimum skill version. Two separate error families:
 
 - **CLI version error** — "Critical update required. Current: X, Required: Y" or similar. Run `npm update -g @prava-sdk/cli`, then retry the command that triggered the error.
-- **Skill version error** — "Skill update required (minimum: X.Y.Z)." Run `npx skills update prava-pay -g`. Then retry the command. **If the same warning re-prints after the update, the skill on disk is updated but the running session still has the old version loaded — ask the user to restart their agent session (the host application — Claude Code, Cursor, Codex, Gemini CLI, etc., whichever this agent is running inside), then retry. Do NOT tell them to restart the `prava` CLI or their machine.**
+- **Skill version error** — "Skill update required (minimum: X.Y.Z)." **First compare `X.Y.Z` to this skill's own `version:` (frontmatter). If your version ≥ `X.Y.Z`, IGNORE it — it's a false positive (you likely just forgot to pass `PRAVA_SKILL_VERSION`); proceed normally.** Only if your version is genuinely below `X.Y.Z`: run `npx skills update prava-pay -g`, then retry. **If the same warning re-prints after the update AND your version is still below `X.Y.Z`, the skill on disk is updated but the running session still has the old version loaded — ask the user to restart their agent session (the host application — Claude Code, Cursor, Codex, Gemini CLI, etc., whichever this agent is running inside), then retry. Do NOT tell them to restart the `prava` CLI or their machine.**
 
 In both cases, do NOT run `prava setup` again unless the user is genuinely setting up for the first time — updating the CLI or skill does not re-link the agent.
 

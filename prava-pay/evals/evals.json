@@ -184,7 +184,7 @@
     },
     {
       "id": 14,
-      "prompt": "I ran `prava status` and got: 'Skill update required (minimum: 2.1.0). Run: npx skills update prava-pay -g'. There's also 'Status: pending' below it. What should I do?",
+      "prompt": "I ran `prava status` and got: 'Skill update required (minimum: 2.2.0). Run: npx skills update prava-pay -g'. There's also 'Status: pending' below it. What should I do?",
       "expected_output": "Agent should treat the skill-version warning as a hard block, not act on the 'pending' state alongside it. Run the skill update first, then re-check status. If the warning persists after update, the new skill needs a session restart.",
       "files": [],
       "expectations": [
@@ -209,7 +209,7 @@
     },
     {
       "id": 16,
-      "prompt": "I ran `npx skills update prava-pay -g` and it said 'All global skills are up to date', but `prava status` still says 'Skill update required (minimum: 2.1.0)'. Now what?",
+      "prompt": "I ran `npx skills update prava-pay -g` and it said 'All global skills are up to date', but `prava status` still says 'Skill update required (minimum: 2.2.0)'. Now what?",
       "expected_output": "Agent should recognize the update succeeded on disk but the running session still has the old skill loaded — needs a host restart for the new skill to take effect.",
       "files": [],
       "expectations": [

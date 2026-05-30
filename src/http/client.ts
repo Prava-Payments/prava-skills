@@ -36,7 +36,7 @@ function getCliVersion(): string {
   }
 }
 
-function compareSemver(a: string, b: string): number {
+export function compareSemver(a: string, b: string): number {
   const pa = a.split('.').map(Number);
   const pb = b.split('.').map(Number);
   for (let i = 0; i < 3; i++) {
@@ -44,6 +44,64 @@ function compareSemver(a: string, b: string): number {
     if ((pa[i] || 0) > (pb[i] || 0)) return 1;
   }
   return 0;
+}
+
+/**
+ * Decide what to do when the CLI is at `current` and the server requires at
+ * least `minVersion`:
+ *   - 'ok'    — current >= minimum, nothing to do
+ *   - 'warn'  — only the PATCH digit is behind → optional bug-fix update
+ *   - 'block' — MAJOR or MINOR is behind → mandatory (server contract changed)
+ *
+ * Pure + exported for unit testing.
+ */
+export function cliVersionVerdict(
+  current: string,
+  minVersion: string,
+): 'ok' | 'warn' | 'block' {
+  if (compareSemver(current, minVersion) >= 0) return 'ok';
+
+  const parse = (v: string) => {
+    const parts = v.split('.');
+    return {
+      major: parseInt(parts[0] || '0', 10) || 0,
+      minor: parseInt(parts[1] || '0', 10) || 0,
+    };
+  };
+  const cur = parse(current);
+  const req = parse(minVersion);
+
+  // Below minimum. If major+minor match, the only gap is patch → warn.
+  // Any difference in major or minor is mandatory → block.
+  return cur.major === req.major && cur.minor === req.minor ? 'warn' : 'block';
+}
+
+/**
+ * Decide whether to warn about the skill version. The CLI cannot read the
+ * agent's LOADED skill version on its own, so the agent passes it via the
+ * PRAVA_SKILL_VERSION env var (sourced from its SKILL.md frontmatter).
+ *   - 'ok'   — agent reported a skill version >= the server minimum → stay silent
+ *   - 'warn' — agent's skill is behind, OR no version was supplied → surface it
+ *
+ * Pure + exported for unit testing.
+ */
+export function skillVersionVerdict(
+  loadedVersion: string | undefined,
+  minVersion: string,
+): 'ok' | 'warn' {
+  if (loadedVersion && compareSemver(loadedVersion, minVersion) >= 0) {
+    return 'ok';
+  }
+  return 'warn';
+}
+
+// Per-process de-dupe so poll loops (many requests in one command) don't repeat
+// the same warning on every tick. Keyed by warning type.
+const warnedOnce = new Set<string>();
+function warnOnce(key: string, message: string): void {
+  if (warnedOnce.has(key)) return;
+  warnedOnce.add(key);
+  console.warn(message);
 }
 
 export class PravaClient {
@@ -108,29 +166,36 @@ export class PravaClient {
   }
 
   private checkCliVersion(minVersion: string): void {
-    const cmp = compareSemver(this.cliVersion, minVersion);
-    if (cmp < 0) {
-      // Check if major version mismatch (critical — block)
-      const currentMajor = parseInt(this.cliVersion.split('.')[0] || '0', 10);
-      const requiredMajor = parseInt(minVersion.split('.')[0] || '0', 10);
+    const verdict = cliVersionVerdict(this.cliVersion, minVersion);
 
-      if (requiredMajor > currentMajor) {
-        console.error(
-          `\nCritical update required. Current: ${this.cliVersion}, Required: ${minVersion}` +
-          `\nRun: npm update -g @prava-sdk/cli\n`,
-        );
-        process.exit(1);
-      }
+    if (verdict === 'block') {
+      // MAJOR or MINOR behind the server's minimum — the request/response
+      // contract changed in a way this CLI cannot speak. Mandatory update.
+      console.error(
+        `\nCritical update required. Current: ${this.cliVersion}, Required: ${minVersion}` +
+        `\nRun: npm update -g @prava-sdk/cli\n`,
+      );
+      process.exit(1);
+    }
 
-      // Minor/patch — warn but continue
-      console.warn(
+    if (verdict === 'warn') {
+      // Only the PATCH digit is behind — backward-compatible bug fix, optional.
+      warnOnce(
+        'cli-version',
         `\nUpdate available: npm update -g @prava-sdk/cli (current: ${this.cliVersion}, latest: ${minVersion})\n`,
       );
     }
   }
 
   private checkSkillVersion(minSkillVersion: string): void {
-    console.warn(
+    // The agent passes its loaded skill version via PRAVA_SKILL_VERSION (from
+    // its SKILL.md frontmatter). If it's current, stay silent — otherwise the
+    // warning would fire on every call even for up-to-date users.
+    if (skillVersionVerdict(process.env['PRAVA_SKILL_VERSION'], minSkillVersion) === 'ok') {
+      return;
+    }
+    warnOnce(
+      'skill-version',
       `\nSkill update required (minimum: ${minSkillVersion}).` +
       `\nRun: npx skills update prava-pay -g\n`,
     );

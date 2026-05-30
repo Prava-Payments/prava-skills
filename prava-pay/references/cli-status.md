@@ -21,7 +21,7 @@ Exit code: 2
 ```
 Agent:   Claude Code
 Status:  pending
-Link:    https://pay.prava.space/link-agent?lid=lk_xxx&pk=...&n=Claude%20Code&p=claude-code&iat=1716969600&sig=...
+Link:    https://pay.prava.space/link-agent?lid=lk_xxx
 ```
 
 Exit code: 2

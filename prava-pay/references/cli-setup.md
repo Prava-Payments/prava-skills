@@ -28,19 +28,22 @@ prava setup --name "Claude Code" --platform claude-code --description "Anthropic
 
 The CLI:
 - Generates a secure Ed25519 keypair locally
-- Prints a linking URL pointing to `pay.prava.space`
+- Registers a pending link with the Prava backend (signing the request with the keypair) and receives a server-issued link id
+- Prints a short linking URL pointing to `pay.prava.space`
 - **Exits immediately** (does NOT block)
 
 Output:
 ```
 To link this agent, open this URL and approve:
-https://pay.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code&p=claude-code&iat=1716969600&sig=...
+https://pay.prava.space/link-agent?lid=lk_xxx
 
 Link expires in 15 minutes.
 Run `prava setup poll` to wait for approval.
 ```
 
-The URL is self-authenticating: `iat` is the issue time (Unix seconds) and `sig` is an Ed25519 signature over the canonical params. The backend rejects approval if `iat + 900s < now()` or the signature doesn't verify.
+The URL carries only an opaque link id (`lid`). The agent's name, platform, and description are stored on the backend and fetched by the dashboard when the user opens the link. The link expires 15 minutes after it is created; the backend rejects approval of an expired link.
+
+Because the CLI registers the link with the server up front, `prava setup` requires network access. If the server is unreachable, it prints an error and exits non-zero — re-run once connectivity is restored.
 
 Show the URL to the user:
 > To connect to Prava, open this link and approve:
