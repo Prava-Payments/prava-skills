@@ -120,4 +120,32 @@ describe('AgentStore', () => {
 
     expect(store.load()).toBeNull();
   });
+
+  it('round-trips linkCreatedAt and linkUrl', () => {
+    store.save({
+      privateKey: 'priv', publicKey: 'pub', linkId: 'lk_x',
+      name: 'Claude Code', linked: false,
+      linkCreatedAt: '2026-05-30T10:00:00.000Z',
+      linkUrl: 'https://pay.prava.space/link-agent?lid=lk_x',
+    });
+    const loaded = store.load()!;
+    expect(loaded.linkCreatedAt).toBe('2026-05-30T10:00:00.000Z');
+    expect(loaded.linkUrl).toBe('https://pay.prava.space/link-agent?lid=lk_x');
+  });
+
+  it('honors PRAVA_STATE_DIR when no dir is passed to constructor', () => {
+    const envDir = join(tmpdir(), `prava-env-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    process.env.PRAVA_STATE_DIR = envDir;
+    try {
+      const envStore = new AgentStore();
+      envStore.save({
+        privateKey: 'k', publicKey: 'p', linkId: 'lk_x', name: 'T', linked: false,
+      });
+      expect(existsSync(join(envDir, 'agent.json'))).toBe(true);
+      try { unlinkSync(join(envDir, 'agent.json')); } catch {}
+      try { rmdirSync(envDir); } catch {}
+    } finally {
+      delete process.env.PRAVA_STATE_DIR;
+    }
+  });
 });
