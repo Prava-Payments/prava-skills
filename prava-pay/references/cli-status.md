@@ -16,7 +16,17 @@ No agent configured. Run: prava setup --name "<name>"
 
 Exit code: 2
 
-### Pending (not yet approved)
+### Pending — link still fresh, URL re-printed (CLI 3.0+)
+
+```
+Agent:   Claude Code
+Status:  pending
+Link:    https://pay.prava.space/link-agent?lid=lk_xxx&pk=...&n=Claude%20Code&p=claude-code&iat=1716969600&sig=...
+```
+
+Exit code: 2
+
+### Pending — legacy CLI / no persisted URL
 
 ```
 Agent:   Claude Code
@@ -25,6 +35,16 @@ Link:    Waiting for approval.
 ```
 
 Exit code: 2
+
+### Expired — previous setup is past TTL (CLI 3.0+)
+
+```
+Link expired. Run `prava setup` again.
+```
+
+Printed to stderr. Exit code: 2.
+
+The CLI checks this locally (no network needed) so it works offline. The same string is also emitted by `prava setup poll` when the server returns `expired`.
 
 ### Active (linked)
 

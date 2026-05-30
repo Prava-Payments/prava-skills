@@ -34,10 +34,13 @@ The CLI:
 Output:
 ```
 To link this agent, open this URL and approve:
-https://pay.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code&p=claude-code
+https://pay.prava.space/link-agent?lid=lk_xxx&pk=xxx&n=Claude+Code&p=claude-code&iat=1716969600&sig=...
 
+Link expires in 15 minutes.
 Run `prava setup poll` to wait for approval.
 ```
+
+The URL is self-authenticating: `iat` is the issue time (Unix seconds) and `sig` is an Ed25519 signature over the canonical params. The backend rejects approval if `iat + 900s < now()` or the signature doesn't verify.
 
 Show the URL to the user:
 > To connect to Prava, open this link and approve:
@@ -60,10 +63,12 @@ Linked! Agent ID: aa_7kMnP2
 Ready to create sessions.
 ```
 
-If the link expires (15 minutes), output:
+If the link expires (15 minutes), the output is:
 ```
 Link expired. Run `prava setup` again.
 ```
+
+Printed to stderr by both `prava status` (local check, works offline) and `prava setup poll` (when server returns `expired`).
 
 Alternatively, you can skip `setup poll` and just check with `prava status` —
 it also detects approval for pending agents.
