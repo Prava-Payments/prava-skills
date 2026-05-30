@@ -168,6 +168,57 @@
         "Plan mentions that 'prava sessions create' has auto-link-check and may detect the approval",
         "Plan does NOT tell the user to delete ~/.prava/agent.json as a first step"
       ]
+    },
+    {
+      "id": 13,
+      "prompt": "`prava status` returned: 'Link expired. Run `prava setup` again.' What should I do?",
+      "expected_output": "Agent should run `prava setup` again to generate a fresh link, then immediately poll. Should confirm with the user once before regenerating, since the old approval link is dead.",
+      "files": [],
+      "expectations": [
+        "Plan recognizes the literal 'Link expired' string as the signal to regenerate",
+        "Plan confirms with the user once before re-running setup (one short question, not a long debate)",
+        "Plan runs `prava setup --name <name> --platform <platform>` to generate a fresh link",
+        "Plan immediately runs `prava setup poll` after showing the new URL",
+        "Plan does NOT keep polling the dead link"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "I ran `prava status` and got: 'Skill update required (minimum: 3.0.0). Run: npx skills update prava-pay -g'. There's also 'Status: pending' below it. What should I do?",
+      "expected_output": "Agent should treat the skill-version warning as a hard block, not act on the 'pending' state alongside it. Run the skill update first, then re-check status. If the warning persists after update, the new skill needs a session restart.",
+      "files": [],
+      "expectations": [
+        "Plan identifies the skill version warning as a hard block",
+        "Plan does NOT act on the 'pending' status while the version warning is in effect",
+        "Plan runs `npx skills update prava-pay -g` first",
+        "Plan re-runs `prava status` after the update to confirm the warning is gone",
+        "Plan recognizes that if the same warning re-prints, the running session has the old skill loaded and asks the user to restart the agent host / agent session (host-agnostic — not specifically Claude Code unless the agent is Claude Code)"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "`prava status` returns 'Status: pending' but the `Link:` line just says 'Waiting for approval.' with no URL. I'm on an older CLI. How should I proceed?",
+      "expected_output": "Agent should recognize the previous link is unrecoverable, confirm with the user once, then regenerate. Should NOT silently poll forever waiting for an approval that can't happen.",
+      "files": [],
+      "expectations": [
+        "Plan recognizes that 'Waiting for approval.' without a URL means the link is unrecoverable from this session",
+        "Plan suggests upgrading the CLI as the long-term fix (`npm update -g @prava-sdk/cli`)",
+        "Plan confirms once with the user before re-running setup",
+        "Plan does NOT silently start `prava setup poll` and wait the full timeout"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "I ran `npx skills update prava-pay -g` and it said 'All global skills are up to date', but `prava status` still says 'Skill update required (minimum: 3.0.0)'. Now what?",
+      "expected_output": "Agent should recognize the update succeeded on disk but the running session still has the old skill loaded — needs a host restart for the new skill to take effect.",
+      "files": [],
+      "expectations": [
+        "Plan recognizes the contradiction (update reports success but CLI still rejects)",
+        "Plan explains that the agent host loads skills at session start, so the new version isn't active in the running session yet (this is host-agnostic — the same is true for Claude Code, Cursor, Codex, Gemini CLI, etc.)",
+        "Plan asks the user to restart the agent host / agent session (NOT the `prava` CLI, NOT the machine). If the plan mentions a specific host by name it should match the agent's actual identity (e.g. Claude Code only if this agent is Claude Code), not a hardcoded reference for a different host",
+        "Plan does NOT keep retrying `npx skills update prava-pay -g`",
+        "Plan does NOT proceed with payment commands while the warning is in effect"
+      ]
     }
   ]
 }
