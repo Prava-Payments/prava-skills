@@ -2,7 +2,7 @@
 name: prava-pay
 version: 2.2.0
 
-description: Use when the user asks to buy something, make a purchase, pay for an order, or pay a bill — or when they ask to set up Prava, link a card, or "use Prava". Also activate when the user asks first-party informational questions about Prava itself (the product or company) what it is, how it works, security and privacy, pricing, supported cards / countries / merchants, passkeys, mandates, refunds, KYC. Do NOT activate for peer-to-peer payments to individuals (Venmo, Cash App, "pay my friend"), comparisons against other payment providers ("Stripe vs Prava", "is Prava better than X"), or general payment-industry questions unrelated to Prava as a product. This skill drives the Prava CLI to link an AI agent to a user's Prava account and retrieve tokenized card credentials (Visa network token + dynamic CVV) for agent-initiated merchant purchases, and answers user FAQs about Prava from an embedded reference. For end-user AI agents (Claude Code, OpenClaw, Hermes, etc.), not for integrating Prava into your own AI application.
+description: Use when the user asks to buy something, make a purchase, pay for an order/bill, set up Prava, link a card, or use Prava. Also use for first-party Prava product questions about what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, or KYC. Do NOT use for peer-to-peer payments, provider comparisons, or general payment-industry questions. Drives the Prava CLI to link an AI agent to a Prava account and retrieve tokenized card credentials for agent-initiated merchant purchases.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
