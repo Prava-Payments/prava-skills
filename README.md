@@ -17,6 +17,7 @@ Each skill includes:
 |-------|----------|-------------|
 | [`prava-pay`](./prava-pay/) | **AI Agents** | Smart wallet for AI agents. Link to a user's Prava account, create payment sessions, and retrieve tokenized credentials (Visa network token + dynamic CVV) for agent-initiated purchases. For open-source or personal AI agent setups like OpenClaw, Hermes, Claude Code. |
 | [`prava-sdk-integration`](./prava-sdk-integration/) | **AI Applications** | Integrate Prava's payment SDK into AI applications. Securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey verification. Includes templates for Next.js, Express, and Vanilla JS. |
+| [`prava-merchants-checkout/swiggy-prava-skill`](./prava-merchants-checkout/swiggy-prava-skill/) | **AI Agents** | Merchant checkout skill for Swiggy orders using Swiggy MCP cart setup and Prava tokenized card payment. |
 
 ## Repository Structure
 
@@ -42,6 +43,15 @@ prava-sdk-integration/             # Skill for AI applications (SDK-based)
     ├── express/                   # Express.js templates
     └── vanilla/                   # Vanilla JS template
 
+prava-merchants-checkout/          # Merchant-specific checkout skills
+└── swiggy-prava-skill/
+    ├── SKILL.md                   # Swiggy MCP + Prava card checkout workflow
+    ├── agents/
+    │   └── openai.yaml            # UI metadata and MCP dependencies
+    └── references/
+        ├── setup.md               # Swiggy MCP, browser access, and Prava setup
+        └── checkout-protocol.md   # Cart, Prava session, and browser card checkout
+
 src/                               # CLI source code (@prava-sdk/cli)
 ```
 
@@ -63,6 +73,9 @@ npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-pay 
 
 # AI application SDK integration skill
 npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-sdk-integration --global --yes
+
+# Swiggy merchant checkout skill
+npx skills add https://github.com/Prava-Payments/prava-skills --skill swiggy-prava-skill --global --yes
 ```
 
 ### Install CLI

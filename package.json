@@ -17,6 +17,7 @@
     "dist",
     "prava-pay",
     "prava-sdk-integration",
+    "prava-merchants-checkout",
     "!**/docs",
     "!**/superpowers",
     "!**/results"
