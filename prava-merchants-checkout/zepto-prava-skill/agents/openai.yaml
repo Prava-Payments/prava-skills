@@ -1,0 +1,11 @@
+interface:
+  display_name: "Zepto Prava Checkout"
+  short_description: "Order Zepto via MCP and Prava card tokens"
+  default_prompt: "Use $zepto-prava-skill to order Zepto items, confirm the delivery address, authorize Prava, and pay the Zepto payment link."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "zepto"
+      description: "Zepto MCP server via mcp-remote for addresses, product search, cart operations, online-payment order creation, and payment status."
+      transport: "stdio"
+      url: "https://mcp.zepto.co.in/mcp"
