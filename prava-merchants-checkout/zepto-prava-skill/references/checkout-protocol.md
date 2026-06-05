@@ -1,6 +1,6 @@
 # Checkout Protocol
 
-Use this before cart mutation, Prava session creation, Zepto payment-link creation, or browser card payment.
+Use this before cart mutation, Prava session creation, Zepto payment-link creation, or browser card payment. The ordering logic is host-independent; only MCP setup and browser-control tooling differ between Codex, Claude Code, Gemini CLI, and other CLI agents.
 
 ## Address and Product Discovery
 
@@ -106,7 +106,7 @@ Capture:
 - `paymentLink`
 - `toPay`
 
-Immediately open the `paymentLink` in the controllable browser. Zepto/Juspay payment links can be very short-lived, so do not delay between link creation and browser payment.
+Immediately open the `paymentLink` in the controllable browser for the current host. Zepto/Juspay payment links can be very short-lived, so do not delay between link creation and browser payment.
 
 ## Zepto/Juspay Browser Payment
 

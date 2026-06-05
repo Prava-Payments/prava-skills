@@ -5,7 +5,7 @@ description: End-to-end Zepto ordering with Zepto MCP and Prava card-token check
 
 # Zepto Prava Skill
 
-Use this skill to order Zepto items through Zepto MCP, keep the user in chat for address selection and Prava approval, and complete the short-lived Zepto/Juspay payment link with Prava tokenized card details. Never ask the user for raw card details, seed phrases, bank credentials, or OTPs in chat.
+Use this skill to order Zepto items through Zepto MCP, keep the user in chat for address selection and Prava approval, and complete the short-lived Zepto/Juspay payment link with Prava tokenized card details. The workflow should work in Codex, Claude Code, Gemini CLI, and other MCP-capable CLI agents by adapting only the MCP installation/configuration commands to the current host. Never ask the user for raw card details, seed phrases, bank credentials, or OTPs in chat.
 
 ## Required References
 
@@ -15,7 +15,7 @@ Use this skill to order Zepto items through Zepto MCP, keep the user in chat for
 ## Operating Rules
 
 1. Use Zepto MCP for saved addresses, product search, cart mutation, order preview, online-payment order creation, and payment-status checks.
-2. Verify Zepto MCP is installed and authenticated before shopping. If tools are absent or auth fails, follow [setup.md](references/setup.md) and explicitly guide the user through the mcp-remote OAuth/mobile-OTP flow.
+2. Verify Zepto MCP is installed and authenticated before shopping. If tools are absent or auth fails, follow the host adapter in [setup.md](references/setup.md) and explicitly guide the user through the mcp-remote OAuth/mobile-OTP flow.
 3. Ask the user to choose or confirm the Zepto delivery address. This is the only routine chat confirmation before checkout.
 4. Do not ask the user to manually search, edit the cart, or enter card details. Use MCP and browser automation.
 5. If product identity is clear, make a best-effort exact selection. Use Zepto past-order preference data before searching. Ask only when the requested product cannot be resolved safely, all plausible matches are unavailable, or the cart total exceeds a user-provided cap.
@@ -35,7 +35,7 @@ Before any Zepto shopping work, ensure both integrations are ready:
 
 - Zepto MCP is configured as a stdio command using `npx --yes mcp-remote https://mcp.zepto.co.in/mcp`.
 - Zepto MCP auth has completed through the mcp-remote OAuth URL and Indian mobile OTP.
-- The current agent session can see or otherwise reach Zepto MCP tools.
+- The current agent host can see or otherwise reach Zepto MCP tools.
 - Prava CLI is installed and linked according to `$prava-pay`.
 
 If any condition fails, use [setup.md](references/setup.md).
