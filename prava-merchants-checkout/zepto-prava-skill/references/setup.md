@@ -2,6 +2,16 @@
 
 Use this when the user asks to install/configure Zepto + Prava, when Zepto tools are missing, or when Zepto auth is absent/stale. Keep the Zepto server command identical across hosts and adapt only the MCP configuration mechanism to the current agent runtime.
 
+## Fast-Path Setup Policy
+
+Do the smallest check that proves the existing setup is usable.
+
+- If `zepto` is already configured with `npx --yes mcp-remote https://mcp.zepto.co.in/mcp`, do not remove/re-add it.
+- If `mcp-remote` connects and returns Zepto tools, do not ask the user to re-authenticate.
+- If `PRAVA_SKILL_VERSION=2.2.0 prava status` returns `active`, do not run `prava setup`, relink the agent, or reinstall Prava.
+- If `npm`, `npx`, or `prava` is not on PATH, check common existing install locations before installing anything: active shell profile, NVM Node versions under `~/.nvm/versions/node/*/bin`, Homebrew paths, and the current host's bundled runtime paths when available.
+- Treat setup as a fallback, not the default path for every order.
+
 ## Zepto MCP Setup
 
 ### Detect the current MCP host
@@ -60,6 +70,8 @@ After setup, verify:
 /Applications/Codex.app/Contents/Resources/codex mcp list
 /Applications/Codex.app/Contents/Resources/codex mcp get zepto
 ```
+
+If Codex lists `zepto` correctly but the current session does not expose Zepto tools, do not reinstall or re-auth by default. Use the direct stdio fallback below for the current order, then suggest a fresh Codex session only as a convenience for future runs.
 
 ### Claude Code
 
@@ -137,28 +149,67 @@ Send an MCP initialize message if you are manually probing stdio:
 
 The bridge should print an authorization URL like `https://auth.zepto.co.in/authorize?...`. Show that URL to the user and ask them to complete the Indian mobile number + OTP flow. Keep the process alive until it prints that it connected to the remote server and established the proxy. Then stop it with Ctrl-C if this was only a manual smoke test; mcp-remote caches the auth state locally.
 
-After successful auth, restart/open a fresh session in the current host if the active session cannot see Zepto tools. Do not make the user manually shop in Zepto just because the active session cannot hot-load the tools.
+If the bridge connects and `tools/list` returns Zepto tools, auth is already usable. Continue shopping through the direct stdio fallback if the active host cannot hot-load tools. Do not ask the user to restart before completing the current order.
+
+### Direct Stdio MCP Fallback
+
+Use this fallback when the host has Zepto configured through `mcp-remote` but does not expose callable Zepto tools in the current agent turn. Keep one `npx --yes mcp-remote https://mcp.zepto.co.in/mcp` process alive and send JSON-RPC messages over stdio:
+
+1. Send `initialize`.
+2. Send `notifications/initialized`.
+3. Optionally call `tools/list` to confirm tool names.
+4. Call tools with `tools/call`, e.g. `list_saved_addresses`, `select_saved_address`, `get_past_order_items`, `search_multiple_products`, `update_cart`, `view_cart`, `get_payment_methods`, `create_online_payment_order`, and `check_payment_status`.
+
+Important behavior for speed:
+
+- Reuse a single MCP process for the whole order instead of starting a new process for every tool call.
+- Wait for the `initialize` response before sending later MCP calls, otherwise the remote server can reject requests for missing session headers.
+- Parse `structuredContent` first; if absent, parse text content as JSON when possible.
+- Close the process after the order completes or fails.
+
+Prefer the bundled helper script instead of hand-writing the JSON-RPC bridge:
+
+```bash
+node <skill-dir>/scripts/zepto-mcp-runner.mjs list_saved_addresses
+node <skill-dir>/scripts/zepto-mcp-runner.mjs search_multiple_products '{"queries":["papaya","pumpkin seeds","Amul dark chocolate"],"pageNumber":0}'
+```
+
+For multi-step fallback flows, create a temporary batch JSON file and run it once so address selection, cart updates, cart view, payment methods, and preview share a single MCP process:
+
+```bash
+node <skill-dir>/scripts/zepto-mcp-runner.mjs --batch /tmp/zepto-calls.json
+```
+
+If `npx` is not on PATH but an existing NVM install has it, either add that Node bin directory to PATH or set `ZEPTO_NPX_PATH=/path/to/npx` for the helper. Do not install Node/npm just because the current shell PATH is incomplete.
 
 ## Zepto Tool Readiness Check
 
-Once Zepto tools are visible, call read-only tools first:
+Once Zepto tools are visible or reachable through the direct stdio fallback, call only the read-only tools needed for the current order:
 
-1. `get_user_details` to confirm the user is registered. If `isRegistered` is false, ask for the user's full name and call `update_user_name`.
-2. `list_saved_addresses` to confirm saved delivery addresses exist.
-3. `get_past_order_items` before any product search.
+1. `list_saved_addresses` to resolve the delivery address.
+2. `get_past_order_items` before product search.
+3. `get_user_details` only if registration state blocks shopping or the payment form later requires a cardholder name.
 
 If there are no saved addresses, use `add_saved_address` only with user-provided address details and coordinates. Do not fabricate address IDs or coordinates.
 
 ## Prava Setup
 
-Read and follow the active `$prava-pay` skill. Use the Prava setup platform/name appropriate to the current host; do not hard-code Codex if you are running in Claude Code, Gemini CLI, or another agent. At minimum:
+Read and follow the active `$prava-pay` skill. Use the Prava setup platform/name appropriate to the current host; do not hard-code Codex if you are running in Claude Code, Gemini CLI, or another agent.
+
+First find an existing CLI:
+
+1. Run `which prava`.
+2. If not found, check common existing Node install paths such as `~/.nvm/versions/node/*/bin/prava` before installing.
+3. Only install `@prava-sdk/cli` if no existing `prava` binary is available.
+
+At minimum:
 
 ```bash
 which prava
 PRAVA_SKILL_VERSION=2.2.0 prava status
 ```
 
-If `prava status` is not `active`, follow `$prava-pay` setup exactly. Do not ask for raw card details. Prava returns tokenized payment credentials only after the user approves the Prava authorization URL.
+If `prava status` is `active`, reuse it. The approval page may show the linked agent name from that active Prava setup, even if it differs from the current host. If `prava status` is not `active`, follow `$prava-pay` setup exactly. Do not ask for raw card details. Prava returns tokenized payment credentials only after the user approves the Prava authorization URL.
 
 ## Browser Automation Setup
 

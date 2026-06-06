@@ -2,10 +2,19 @@
 
 Use this before cart mutation, Prava session creation, Zepto payment-link creation, or browser card payment. The ordering logic is host-independent; only MCP setup and browser-control tooling differ between Codex, Claude Code, Gemini CLI, and other CLI agents.
 
+## Fast Checkout Path
+
+Use this path when the user asks for a normal Zepto order and existing auth is already available:
+
+1. Reuse visible Zepto MCP tools, or the direct stdio MCP fallback if the host has a configured `mcp-remote` bridge but tools are not surfaced in the current session.
+2. Reuse an active Prava link. Do not reinstall, reconfigure, or call `prava setup` when `PRAVA_SKILL_VERSION=2.2.0 prava status` returns `active`.
+3. Treat saved address labels in the user request as confirmation. For example, if the user says `Favourite Place`, select the saved address with that label and proceed.
+4. Do not ask routine confirmation after the address is resolved. Ask only for unsafe substitutions, unavailable products, ambiguous addresses, or totals above a user-provided cap.
+
 ## Address and Product Discovery
 
 1. Call Zepto MCP `list_saved_addresses`.
-2. Ask the user to choose/confirm the delivery address by label or number.
+2. If the user already named a saved address label, select that address directly. Otherwise ask the user to choose/confirm the delivery address by label or number.
 3. Call `select_saved_address` with the exact address ID returned by Zepto.
 4. Call `get_past_order_items` once.
 5. Resolve requested products:
@@ -55,25 +64,34 @@ Before creating the Prava session, confirm internally:
 - Merchant country: `IN`
 - Currency: `INR`
 - Total amount: exact Zepto preview amount, formatted as rupees with two decimals
-- Product descriptions: clear Zepto item/fee lines whose sum equals the total
+- Product descriptions: by default, one aggregate Zepto order line whose unit price equals the exact final total
+
+Prefer one aggregate product line for faster command construction and clearer Prava approval screens. Multiple lines are allowed only when itemization is explicitly required or when they improve audit clarity without confusing the approval page.
 
 Example:
 
 ```bash
 PRAVA_SKILL_VERSION=2.2.0 prava sessions create \
-  --total-amount "70.00" --currency INR \
+  --total-amount "291.00" --currency INR \
   --merchant-name "Zepto" \
   --merchant-url "https://www.zeptonow.com" \
   --merchant-country IN \
-  --product '{"description":"Coca-Cola Diet Coke Soft Drink Can | Low-Calorie & Fizzy","unit_price":"40.00","quantity":1}' \
-  --product '{"description":"Zepto delivery fee","unit_price":"30.00","quantity":1}'
+  --product '{"description":"Zepto order: Papaya, Daily Good Pumpkin Seeds, Amul Dark Chocolate","unit_price":"291.00","quantity":1}'
 ```
 
-Show the Prava approval URL, then immediately run:
+Show the Prava approval URL with an explicit action, then immediately run the poll command.
+
+Use wording like:
+
+```text
+Open this Prava link and tap Approve. The page may show the already linked agent name from `prava status`.
+```
 
 ```bash
 PRAVA_SKILL_VERSION=2.2.0 prava sessions poll --session-id <session_id>
 ```
+
+If polling is still waiting after the first short interval, remind once with the same direct instruction: "Please tap Approve on the Prava page." Do not describe it as "card entry" unless Prava actually asks the user to add a new card.
 
 Treat returned fields as sensitive:
 
@@ -144,6 +162,15 @@ If Zepto returns `PENDING` and instructs polling, call again with `poll: true`. 
 - Last payment status
 - Payment link if still likely useful
 - That the user may still be completing payment
+
+## Abort and Non-Approval
+
+If the user says they did not approve, tapped Dismiss, or wants to stop while Prava polling is pending:
+
+1. Stop the Prava poll if it is still running.
+2. Do not create the Zepto payment link.
+3. Report that no payment credentials were issued and no Zepto order was placed.
+4. Leave the Zepto cart intact unless the user asks to clear or change it.
 
 ## Final Report
 
