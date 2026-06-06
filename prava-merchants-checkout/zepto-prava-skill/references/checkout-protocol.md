@@ -10,22 +10,24 @@ Use this path when the user asks for a normal Zepto order and existing auth is a
 2. Reuse an active Prava link. Do not reinstall, reconfigure, or call `prava setup` when `PRAVA_SKILL_VERSION=2.2.0 prava status` returns `active`.
 3. Treat saved address labels in the user request as confirmation. For example, if the user says `Favourite Place`, select the saved address with that label and proceed.
 4. Do not ask routine confirmation after the address is resolved. Ask only for unsafe substitutions, unavailable products, ambiguous addresses, or totals above a user-provided cap.
+5. Do not run setup doctors, `--list-tools`, or manual auth probes after a normal Zepto MCP call succeeds. Those checks are for missing/stale setup, not the shopping path.
 
 ## Address and Product Discovery
 
 1. Call Zepto MCP `list_saved_addresses`.
 2. If the user already named a saved address label, select that address directly. Otherwise ask the user to choose/confirm the delivery address by label or number.
 3. Call `select_saved_address` with the exact address ID returned by Zepto.
-4. Call `get_past_order_items` once.
-5. Resolve requested products:
-   - Use exact past-order product names when there is a match.
+4. Resolve requested products:
+   - For clear item names, search directly first.
+   - Call `get_past_order_items` only for repeat/usual orders, ambiguous products, or poor search matches.
+   - Use exact past-order product names when there is a relevant match.
    - Use `search_products` for one concrete product.
    - Use `search_multiple_products` for multiple distinct products.
    - Do not substitute a different brand/size/type unless the requested item cannot be resolved; then show the closest matches and ask.
 
 ## Cart Handling
 
-Add/update products with `update_cart`, then call `view_cart` and `get_payment_methods`.
+Add/update products with `update_cart`, then call `view_cart` and `get_payment_methods`. If `view_cart` already exactly matches the requested items and quantities, skip `update_cart`; do not rebuild an already-correct basket.
 
 For the normal Prava/card flow, only continue if `Pay Online (UPI / Cards / Wallets)` is available. Do not use COD, wallet, or UPI reserve pay unless the user explicitly switches away from Prava/card payment.
 
@@ -162,6 +164,8 @@ If Zepto returns `PENDING` and instructs polling, call again with `poll: true`. 
 - Last payment status
 - Payment link if still likely useful
 - That the user may still be completing payment
+
+If Zepto reports a terminal `FAILED` or the browser returns a URL containing an authorization failure, one backend `check_payment_status` result is enough to classify the payment as failed. Use `list_order_history` only when needed to avoid duplicate orders or to resolve a contradictory browser success message.
 
 ## Abort and Non-Approval
 

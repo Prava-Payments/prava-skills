@@ -20,6 +20,8 @@ node <skill-dir>/scripts/zepto-prava-doctor.mjs
 
 The doctor checks `npx`, `prava`, `prava status`, Codex Zepto MCP config when Codex is present, and Zepto MCP tool reachability. It must not install packages, relink Prava, mutate the Zepto cart, or create orders.
 
+In sandboxed hosts, the doctor can spend up to 90 seconds on Zepto MCP reachability and may need local-port/network approval for `mcp-remote`. For a normal shopping request, skip the doctor once any Zepto MCP tool call or fallback runner call succeeds.
+
 ## Zepto MCP Setup
 
 ### Detect the current MCP host
@@ -179,15 +181,17 @@ Prefer the bundled helper script instead of hand-writing the JSON-RPC bridge:
 
 ```bash
 node <skill-dir>/scripts/zepto-mcp-runner.mjs --list-tools
-node <skill-dir>/scripts/zepto-mcp-runner.mjs list_saved_addresses
-node <skill-dir>/scripts/zepto-mcp-runner.mjs search_multiple_products '{"queries":["papaya","pumpkin seeds","Amul dark chocolate"],"pageNumber":0}'
+node <skill-dir>/scripts/zepto-mcp-runner.mjs --compact list_saved_addresses
+node <skill-dir>/scripts/zepto-mcp-runner.mjs --compact search_multiple_products '{"queries":["papaya","pumpkin seeds","Amul dark chocolate"],"pageNumber":0}'
 ```
 
 For multi-step fallback flows, create a temporary batch JSON file and run it once so address selection, cart updates, cart view, payment methods, and preview share a single MCP process:
 
 ```bash
-node <skill-dir>/scripts/zepto-mcp-runner.mjs --batch /tmp/zepto-calls.json
+node <skill-dir>/scripts/zepto-mcp-runner.mjs --compact --batch-json '[{"name":"list_saved_addresses","arguments":{}},{"name":"search_multiple_products","arguments":{"queries":["papaya","pumpkin seeds","Amul dark chocolate"],"pageNumber":0}}]'
 ```
+
+If inline JSON becomes too large for the current shell or host, pass the same JSON over stdin with `--batch -`. Use a temporary batch file only as a last resort, and remove it immediately after the runner exits. Temporary files must not be left in `/tmp`, `/private/tmp`, or the workspace after checkout succeeds, fails, or is aborted.
 
 The helper auto-discovers `npx` from PATH, NVM versions under `~/.nvm/versions/node/*/bin`, `~/.npm-global/bin`, Homebrew paths, and Codex app resources. If `npx` is installed elsewhere, set `ZEPTO_NPX_PATH=/path/to/npx`. Do not install Node/npm just because the current shell PATH is incomplete.
 
@@ -196,7 +200,7 @@ The helper auto-discovers `npx` from PATH, NVM versions under `~/.nvm/versions/n
 Once Zepto tools are visible or reachable through the direct stdio fallback, call only the read-only tools needed for the current order:
 
 1. `list_saved_addresses` to resolve the delivery address.
-2. `get_past_order_items` before product search.
+2. `get_past_order_items` only for repeat/usual orders, ambiguous products, or poor search matches.
 3. `get_user_details` only if registration state blocks shopping or the payment form later requires a cardholder name.
 
 If there are no saved addresses, use `add_saved_address` only with user-provided address details and coordinates. Do not fabricate address IDs or coordinates.

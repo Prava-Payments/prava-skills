@@ -10,15 +10,18 @@ const endpoint = "https://mcp.zepto.co.in/mcp";
 
 function usage() {
   console.error(`Usage:
-  zepto-mcp-runner.mjs <tool-name> [json-args]
+  zepto-mcp-runner.mjs [--compact] <tool-name> [json-args]
   zepto-mcp-runner.mjs --list-tools
-  zepto-mcp-runner.mjs --batch <json-file>
+  zepto-mcp-runner.mjs [--compact] --batch <json-file|->
+  zepto-mcp-runner.mjs [--compact] --batch-json '<json-array>'
 
 Batch file shape:
   [
     {"name":"list_saved_addresses","arguments":{}},
     {"name":"select_saved_address","arguments":{"addressId":"..."}}
   ]
+
+--compact removes large image URLs and trims verbose search/history output for faster agent parsing.
 `);
 }
 
@@ -88,6 +91,76 @@ function parseToolResult(result) {
   } catch {
     return { text };
   }
+}
+
+function compactLimit(envName, fallback) {
+  const value = Number(process.env[envName] || fallback);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function compactPastOrderText(text) {
+  const limit = compactLimit("ZEPTO_COMPACT_PAST_LIMIT", 30);
+  const [listPart] = text.split("\n\n---");
+  const lines = listPart.split("\n");
+  const header = lines.slice(0, 2);
+  const products = lines.slice(2).filter((line) => /^\d+\./.test(line.trim()));
+  const shown = products.slice(0, limit);
+  const suffix =
+    products.length > shown.length
+      ? [`... ${products.length - shown.length} more past products omitted in compact output.`]
+      : [];
+  return [...header, ...shown, ...suffix, "Product variant IDs omitted in compact output."].join("\n");
+}
+
+function compactValue(value, toolName) {
+  if (Array.isArray(value)) {
+    return value.map((item) => compactValue(item, toolName));
+  }
+
+  if (!value || typeof value !== "object") return value;
+
+  const productLimit = compactLimit("ZEPTO_COMPACT_PRODUCT_LIMIT", 6);
+  const output = {};
+  for (const [key, child] of Object.entries(value)) {
+    if (key === "imageUrl" || key === "images" || key === "media") continue;
+    if (key === "products" && Array.isArray(child)) {
+      output[key] = child.slice(0, productLimit).map((item) => compactValue(item, toolName));
+      if (child.length > productLimit) output.productsOmitted = child.length - productLimit;
+      continue;
+    }
+    if (key === "text" && toolName === "get_past_order_items" && typeof child === "string") {
+      output[key] = compactPastOrderText(child);
+      continue;
+    }
+    output[key] = compactValue(child, toolName);
+  }
+  return output;
+}
+
+function compactToolResult(toolName, result) {
+  return compactValue(result, toolName);
+}
+
+async function readStdin() {
+  process.stdin.setEncoding("utf8");
+  let input = "";
+  for await (const chunk of process.stdin) input += chunk;
+  return input;
+}
+
+function parseBatchJson(text, source) {
+  let parsed;
+  try {
+    parsed = JSON.parse(text);
+  } catch (error) {
+    throw new Error(`Could not parse ${source} as JSON: ${error.message}`);
+  }
+
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${source} must be a JSON array of tool calls.`);
+  }
+
+  return parsed;
 }
 
 class McpClient {
@@ -195,7 +268,10 @@ class McpClient {
 }
 
 async function main() {
-  const [, , first, second] = process.argv;
+  const args = process.argv.slice(2);
+  const compact = args.includes("--compact");
+  const positional = args.filter((arg) => arg !== "--compact");
+  const [first, second] = positional;
   if (!first) {
     usage();
     process.exit(2);
@@ -209,7 +285,14 @@ async function main() {
       usage();
       process.exit(2);
     }
-    calls = JSON.parse(await readFile(second, "utf8"));
+    const batchText = second === "-" ? await readStdin() : await readFile(second, "utf8");
+    calls = parseBatchJson(batchText, second === "-" ? "stdin batch" : second);
+  } else if (first === "--batch-json") {
+    if (!second) {
+      usage();
+      process.exit(2);
+    }
+    calls = parseBatchJson(second, "--batch-json");
   } else if (listTools) {
     calls = [];
   } else {
@@ -226,9 +309,10 @@ async function main() {
 
     const results = [];
     for (const call of calls) {
+      const result = await client.callTool(call.name, call.arguments ?? {});
       results.push({
         name: call.name,
-        result: await client.callTool(call.name, call.arguments ?? {}),
+        result: compact ? compactToolResult(call.name, result) : result,
       });
     }
     console.log(JSON.stringify(results.length === 1 ? results[0].result : results, null, 2));

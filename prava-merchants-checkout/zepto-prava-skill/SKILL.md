@@ -18,7 +18,7 @@ Most user requests should not run the setup path. Before installing, reconfiguri
 
 1. If Zepto tools are visible, call them directly. If the user named a saved address label such as `Favourite Place`, select that label when it appears in `list_saved_addresses` and do not ask for another address confirmation.
 2. If Zepto tools are not visible but the host already has `zepto` configured as `npx --yes mcp-remote https://mcp.zepto.co.in/mcp`, use the direct stdio MCP fallback in [setup.md](references/setup.md) instead of reinstalling or asking the user to restart.
-3. If the current host is sandboxed or PATH looks incomplete, run `node scripts/zepto-prava-doctor.mjs` as a read-only preflight before changing setup.
+3. If the current host is sandboxed or PATH looks incomplete, run `node scripts/zepto-prava-doctor.mjs` as a read-only preflight before changing setup. Do not run the doctor during a normal order if a direct Zepto tool call or `zepto-mcp-runner.mjs` call has already succeeded.
 4. Check Prava with `which prava` or an existing absolute `prava` path, then `PRAVA_SKILL_VERSION=2.2.0 prava status`. If status is `active`, do not run `prava setup`, reinstall the CLI, or change the linked agent.
 5. Only use setup instructions after the fast path proves one of these is truly missing: Zepto server config, Zepto auth, Prava CLI, Prava active link, or a controllable browser route.
 
@@ -28,7 +28,7 @@ Most user requests should not run the setup path. Before installing, reconfiguri
 2. Prefer the fast path. Verify Zepto/Prava only enough to prove they are usable; do not reinstall, reconfigure, or relink when an existing active setup works.
 3. Ask the user to choose or confirm the Zepto delivery address only when they did not already name a saved address label or when the named label is missing/ambiguous. This is the only routine chat confirmation before checkout.
 4. Do not ask the user to manually search, edit the cart, or enter card details. Use MCP and browser automation.
-5. If product identity is clear, make a best-effort exact selection. Use Zepto past-order preference data before searching. Ask only when the requested product cannot be resolved safely, all plausible matches are unavailable, or the cart total exceeds a user-provided cap.
+5. If product identity is clear, make a best-effort exact selection from search results. Use Zepto past-order preference data only for repeat/usual orders, ambiguous products, or poor search matches. Ask only when the requested product cannot be resolved safely, all plausible matches are unavailable, or the cart total exceeds a user-provided cap.
 6. Use `create_online_payment_order` with `confirmOrder: false` to get the final amount before Prava. Do not create the real Zepto payment link until Prava credentials are ready, because the Zepto/Juspay link is short-lived.
 7. Create the Prava session for the exact final Zepto amount in INR, with merchant `Zepto`, URL `https://www.zeptonow.com`, and country `IN`. Use one clear aggregate product line by default, e.g. `Zepto order: papaya, pumpkin seeds, Amul dark chocolate`, so the Prava approval screen shows the whole purpose instead of only the first cart item. Show the Prava approval URL with explicit wording: "Open this link and tap Approve." Then immediately poll.
 8. After Prava returns the Visa network token, one-time cryptogram, and expiry, immediately create the Zepto online-payment order with `confirmOrder: true`, open the returned payment link in a controllable browser, and pay using the Prava credentials.
@@ -56,7 +56,9 @@ Use Zepto MCP `list_saved_addresses`. If the user already specified a saved labe
 
 ### 3. Product and Cart
 
-Call `get_past_order_items` once before product search. Use exact past-order names when they match the user's request. Then use `search_products` for one item or `search_multiple_products` for multiple distinct items. Add chosen items with `update_cart`, then call `view_cart`.
+For clear product names, search directly: use `search_products` for one item or `search_multiple_products` for multiple distinct items. Call `get_past_order_items` only when the user asks for a repeat/usual item, gives an ambiguous description, or search results do not safely resolve the item. Add chosen items with `update_cart`, then call `view_cart`. If the cart already exactly matches the requested items and quantities, skip cart mutation and move to preview.
+
+When using the fallback runner, prefer `node scripts/zepto-mcp-runner.mjs --compact ...` and batch adjacent Zepto calls so the agent does not spend time parsing image URLs, full catalogs, or repeated MCP initialization output. Prefer `--batch-json` or `--batch -` over temporary batch files. If a temporary batch file is unavoidable, delete it in the same turn after the runner exits, including failure paths.
 
 ### 4. Zepto Preview
 

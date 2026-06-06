@@ -70,23 +70,29 @@ src/                               # CLI source code (@prava-sdk/cli)
 Install all skills globally:
 
 ```bash
-npx skills add https://github.com/Prava-Payments/prava-skills --global --yes
+npx --yes skills add https://github.com/Prava-Payments/prava-skills --global --yes --full-depth
+```
+
+If you are installing from Codex or another sandboxed/non-login agent shell and `npx` is not on PATH, use a PATH-resolving install command:
+
+```bash
+NPX="$(command -v npx || find "$HOME/.nvm/versions/node" "$HOME/.npm-global" /opt/homebrew /usr/local -path '*/bin/npx' -type f 2>/dev/null | sort -Vr | head -n 1)" && "$NPX" --yes skills add https://github.com/Prava-Payments/prava-skills --global --yes --full-depth
 ```
 
 Or install a specific skill:
 
 ```bash
 # Prava wallet skill
-npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-pay --global --yes --full-depth
+npx --yes skills add https://github.com/Prava-Payments/prava-skills --skill prava-pay --global --yes --full-depth
 
 # AI application SDK integration skill
-npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-sdk-integration --global --yes --full-depth
+npx --yes skills add https://github.com/Prava-Payments/prava-skills --skill prava-sdk-integration --global --yes --full-depth
 
 # Swiggy merchant checkout skill
-npx skills add https://github.com/Prava-Payments/prava-skills --skill swiggy-prava-skill --global --yes --full-depth
+npx --yes skills add https://github.com/Prava-Payments/prava-skills --skill swiggy-prava-skill --global --yes --full-depth
 
 # Zepto merchant checkout skill
-npx skills add https://github.com/Prava-Payments/prava-skills --skill zepto-prava-skill --global --yes --full-depth
+npx --yes skills add https://github.com/Prava-Payments/prava-skills --skill zepto-prava-skill --global --yes --full-depth
 ```
 
 Use `--full-depth` when installing a single skill so sibling skills are not installed alongside the requested one.
