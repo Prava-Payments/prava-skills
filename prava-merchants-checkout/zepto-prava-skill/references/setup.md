@@ -12,6 +12,14 @@ Do the smallest check that proves the existing setup is usable.
 - If `npm`, `npx`, or `prava` is not on PATH, check common existing install locations before installing anything: active shell profile, NVM Node versions under `~/.nvm/versions/node/*/bin`, Homebrew paths, and the current host's bundled runtime paths when available.
 - Treat setup as a fallback, not the default path for every order.
 
+For a quick read-only diagnosis, run the bundled doctor:
+
+```bash
+node <skill-dir>/scripts/zepto-prava-doctor.mjs
+```
+
+The doctor checks `npx`, `prava`, `prava status`, Codex Zepto MCP config when Codex is present, and Zepto MCP tool reachability. It must not install packages, relink Prava, mutate the Zepto cart, or create orders.
+
 ## Zepto MCP Setup
 
 ### Detect the current MCP host
@@ -170,6 +178,7 @@ Important behavior for speed:
 Prefer the bundled helper script instead of hand-writing the JSON-RPC bridge:
 
 ```bash
+node <skill-dir>/scripts/zepto-mcp-runner.mjs --list-tools
 node <skill-dir>/scripts/zepto-mcp-runner.mjs list_saved_addresses
 node <skill-dir>/scripts/zepto-mcp-runner.mjs search_multiple_products '{"queries":["papaya","pumpkin seeds","Amul dark chocolate"],"pageNumber":0}'
 ```
@@ -180,7 +189,7 @@ For multi-step fallback flows, create a temporary batch JSON file and run it onc
 node <skill-dir>/scripts/zepto-mcp-runner.mjs --batch /tmp/zepto-calls.json
 ```
 
-If `npx` is not on PATH but an existing NVM install has it, either add that Node bin directory to PATH or set `ZEPTO_NPX_PATH=/path/to/npx` for the helper. Do not install Node/npm just because the current shell PATH is incomplete.
+The helper auto-discovers `npx` from PATH, NVM versions under `~/.nvm/versions/node/*/bin`, `~/.npm-global/bin`, Homebrew paths, and Codex app resources. If `npx` is installed elsewhere, set `ZEPTO_NPX_PATH=/path/to/npx`. Do not install Node/npm just because the current shell PATH is incomplete.
 
 ## Zepto Tool Readiness Check
 

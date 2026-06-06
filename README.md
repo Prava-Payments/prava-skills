@@ -98,6 +98,14 @@ The merchant checkout skills use MCP servers to build and verify carts before Pr
 - **Swiggy**: `swiggy-prava-skill` supports Swiggy Food, Instamart, and Dineout MCP setup plus browser-based card checkout with Prava credentials.
 - **Zepto**: `zepto-prava-skill` supports Zepto MCP setup via `npx --yes mcp-remote https://mcp.zepto.co.in/mcp`, Zepto OAuth/mobile OTP auth, Zepto cart/payment-link creation, and deterministic Zepto/Juspay card checkout with Prava credentials.
 
+For Zepto checkout debugging in sandboxed agent hosts, run the read-only doctor before reinstalling or reauthenticating anything:
+
+```bash
+npm run doctor:zepto
+```
+
+It checks whether the current host can find `npx`, find `prava`, read `prava status`, see the Codex Zepto MCP config when Codex is present, and reach Zepto MCP tools through the fallback runner.
+
 ### Install CLI
 
 ```bash

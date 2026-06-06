@@ -18,8 +18,9 @@ Most user requests should not run the setup path. Before installing, reconfiguri
 
 1. If Zepto tools are visible, call them directly. If the user named a saved address label such as `Favourite Place`, select that label when it appears in `list_saved_addresses` and do not ask for another address confirmation.
 2. If Zepto tools are not visible but the host already has `zepto` configured as `npx --yes mcp-remote https://mcp.zepto.co.in/mcp`, use the direct stdio MCP fallback in [setup.md](references/setup.md) instead of reinstalling or asking the user to restart.
-3. Check Prava with `which prava` and `PRAVA_SKILL_VERSION=2.2.0 prava status`. If status is `active`, do not run `prava setup`, reinstall the CLI, or change the linked agent.
-4. Only use setup instructions after the fast path proves one of these is truly missing: Zepto server config, Zepto auth, Prava CLI, Prava active link, or a controllable browser route.
+3. If the current host is sandboxed or PATH looks incomplete, run `node scripts/zepto-prava-doctor.mjs` as a read-only preflight before changing setup.
+4. Check Prava with `which prava` or an existing absolute `prava` path, then `PRAVA_SKILL_VERSION=2.2.0 prava status`. If status is `active`, do not run `prava setup`, reinstall the CLI, or change the linked agent.
+5. Only use setup instructions after the fast path proves one of these is truly missing: Zepto server config, Zepto auth, Prava CLI, Prava active link, or a controllable browser route.
 
 ## Operating Rules
 

@@ -44,13 +44,25 @@ Trigger phrases (non-exhaustive): "what is Prava", "how does it work", "is it se
 
 ## Prerequisites: CLI Installation
 
-Before running any `prava` command, check if the CLI is installed:
+Before running any `prava` command, check whether the CLI is available in the current agent shell:
 
 ```bash
 which prava
 ```
 
-If not found, install it:
+If `which prava` fails, do **not** assume Prava is uninstalled. Agent hosts often run non-login or sandboxed shells where `nvm`, Homebrew, and user npm paths are not loaded. First look for an existing binary in common install locations:
+
+```bash
+find ~/.nvm/versions/node ~/.npm-global /opt/homebrew /usr/local -path '*/bin/prava' -type f 2>/dev/null
+```
+
+If you find an existing `prava` binary, use its absolute path or prepend its `bin` directory to `PATH`, then run status:
+
+```bash
+PATH=/path/to/prava/bin:$PATH PRAVA_SKILL_VERSION=<this skill's version> prava status
+```
+
+Only if no existing `prava` binary is found should you install it:
 
 ```bash
 npm install -g @prava-sdk/cli
@@ -91,7 +103,7 @@ Do not run separate version-check commands — the CLI handles this automaticall
 
 You MUST run these two commands, in this order, before any other prava command — never skip either:
 
-1. `which prava` — if missing, run `npm install -g @prava-sdk/cli` (see Prerequisites above for sudo / verify fallbacks). Then proceed.
+1. `which prava` — if missing, search common existing install locations first. Only run `npm install -g @prava-sdk/cli` if no existing binary is found (see Prerequisites above for sudo / verify fallbacks). Then proceed.
 2. `prava status` — check agent link state.
 
 Decision tree based on `prava status` output (check in this order — first matching condition wins):

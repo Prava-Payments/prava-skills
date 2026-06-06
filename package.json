@@ -32,7 +32,8 @@
     "eval:pay": "tsx prava-pay/evals/run.ts",
     "eval:pay:about": "tsx prava-pay/evals/about-run.ts",
     "eval:sdk": "tsx prava-sdk-integration/evals/run.ts",
-    "eval:routing": "tsx evals/routing.ts"
+    "eval:routing": "tsx evals/routing.ts",
+    "doctor:zepto": "node prava-merchants-checkout/zepto-prava-skill/scripts/zepto-prava-doctor.mjs"
   },
   "dependencies": {
     "commander": "^12.0.0"

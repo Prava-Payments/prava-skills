@@ -6,6 +6,14 @@
 prava status
 ```
 
+If `prava` is not found, treat it as a PATH discovery issue before treating it as an install issue. Sandboxed/non-login agent shells may not load `nvm`, Homebrew, or user npm paths. Check common existing locations first:
+
+```bash
+find ~/.nvm/versions/node ~/.npm-global /opt/homebrew /usr/local -path '*/bin/prava' -type f 2>/dev/null
+```
+
+Use an absolute binary path or prepend its `bin` directory to `PATH` before deciding to install `@prava-sdk/cli`.
+
 ## Output varies by state
 
 ### No agent configured
