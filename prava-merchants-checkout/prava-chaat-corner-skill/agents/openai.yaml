@@ -1,0 +1,12 @@
+interface:
+  display_name: "Chaat Corner Prava Checkout"
+  short_description: "Order Chaat Corner pickup with Prava card tokens"
+  default_prompt: "Use $prava-chaat-corner-skill to order from Chaat Corner's official Popmenu menu, keep pickup/no-tip preferences explicit, get the live checkout total, create a Prava USD authorization, then complete the Popmenu/Spreedly card checkout with Prava tokenized credentials."
+dependencies:
+  tools:
+    - type: "shell"
+      value: "prava"
+      description: "Prava CLI for agent-linked payment authorization and tokenized card credentials."
+    - type: "browser"
+      value: "native-browser-tools-or-chrome-cdp"
+      description: "A host browser/computer-use/playwright tool that can type into cross-origin Spreedly iframes, or Chrome/Chromium DevTools Protocol access as a fallback."
