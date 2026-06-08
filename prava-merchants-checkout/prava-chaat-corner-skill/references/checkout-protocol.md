@@ -2,6 +2,10 @@
 
 Use this before cart mutation, Prava session creation, or Popmenu/Spreedly card checkout.
 
+## Control Model
+
+The LLM/browser agent is the checkout controller. It should inspect the live page, make the next decision, act with browser tools, and verify the outcome after each meaningful action. Deterministic scripts are narrow helpers for diagnostics or difficult browser mechanics; they are not the main ordering actor.
+
 ## Merchant Facts
 
 - Merchant: `Chaat Corner`
@@ -21,6 +25,17 @@ Use this before cart mutation, Prava session creation, or Popmenu/Spreedly card 
 4. Resolve each selected menu item by visible item name and live item price on the official menu.
 5. Prefer quantity controls inside each item modal. If quantity controls fail in browser automation, add one item and adjust the quantity in the cart.
 6. Continue to checkout and read the live totals from the site. Do not hard-code totals from previous orders.
+7. If the menu is unavailable for ASAP pickup and only scheduled pickup is offered, stop and tell the user the exact scheduled pickup time before proceeding.
+
+Use this loop throughout discovery and cart building:
+
+```text
+Observe current visible page state.
+Choose the smallest next action.
+Act through native browser/computer-use tools.
+Verify the expected page/cart change.
+Stop on mismatch, unexpected totals, unavailable items, CAPTCHA, payment challenge, or unclear page state.
+```
 
 ## Contact Details
 
@@ -100,11 +115,13 @@ Do not attempt to inject JavaScript into these frames or bypass their origin iso
 6. Send the Prava cryptogram as keyboard/text input.
 7. Fill the parent-page expiry and ZIP fields normally.
 
-In Codex's in-app browser, direct clicks into cross-origin iframes can be blocked. The submit-empty-card-then-reload trick only produced `Invalid payment` and did not expose editable card inputs in the parent DOM. If this happens, use the CDP script in `scripts/chaat-corner-cdp-checkout.mjs`, which drives a real Chrome/Chromium window with normal input events.
+In Codex's in-app browser, direct clicks into cross-origin iframes can be blocked. The submit-empty-card-then-reload trick only produced `Invalid payment` and did not expose editable card inputs in the parent DOM. If this happens, use a CDP-controlled browser or a narrowly scoped helper that sends normal input events. Do not let a script decide whether the order should proceed.
 
-## CDP Script Flow
+## Helper Script Policy
 
-The bundled script:
+The bundled full-page script exists for diagnostics and fallback mechanics. Prefer native browser/computer-use tools for real checkout. If the script is used, the LLM must verify the page/cart state before running it and must inspect the result afterward.
+
+By default, `scripts/chaat-corner-cdp-checkout.mjs`:
 
 1. Finds or launches Chrome/Chromium with remote debugging.
 2. Opens the official Chaat Corner menu URL.
@@ -115,9 +132,10 @@ The bundled script:
 7. Unchecks marketing/text opt-ins.
 8. Fills expiry and ZIP.
 9. Uses CDP input events to click/type into Spreedly iframes.
-10. Verifies expected total and tip before submit when `EXPECTED_TOTAL` / `EXPECTED_TIP` are provided.
-11. Clicks `Place Order`.
-12. Prints the confirmation page status, URL, visible ready time, and item summary.
+10. Verifies expected total and tip when `EXPECTED_TOTAL` / `EXPECTED_TIP` are provided.
+11. Prints `stage: "pre-submit-ok"` and stops before order submission.
+
+It does not submit unless `ALLOW_SCRIPT_FINAL_SUBMIT=1` is explicitly set. Avoid that flag in ordinary agent use. The preferred final submit path is a fresh LLM/browser observation followed by a browser click after exact user approval.
 
 Run pattern:
 
@@ -132,10 +150,11 @@ CARD_EXPIRY="06/2031" \
 CARD_ZIP="<billing ZIP>" \
 EXPECTED_TOTAL="<exact checkout total>" \
 EXPECTED_TIP="0.00" \
+DRY_RUN=1 \
 node <skill-dir>/scripts/chaat-corner-cdp-checkout.mjs
 ```
 
-Use `DRY_RUN=1` to stop after pre-submit verification. Use this before creating Prava credentials if you only need to verify browser viability.
+Use `DRY_RUN=1` before creating Prava credentials if you only need to verify browser viability. Do not use Prava credentials for preflight.
 
 ## Final Submission Gate
 
@@ -148,7 +167,7 @@ Immediately before final submit, confirm:
 - Contact email/name/phone are correct enough for pickup.
 - Marketing opt-ins are off unless requested.
 
-Then submit. After submit, wait for a confirmation/status page. A successful observed URL shape is:
+Then submit using browser/computer-use control, not a blind script. After submit, wait for a confirmation/status page. A successful observed URL shape is:
 
 ```text
 https://www.chaatcornersf.com/popmenu-order/chaat-corner/status/<status-id>

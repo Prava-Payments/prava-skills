@@ -189,7 +189,7 @@ async function main() {
     ok: checks.every((item) => item.ok),
     recommendation:
       checks.every((item) => item.ok)
-        ? "CDP browser automation is available. Run the checkout script, then optionally run DRY_RUN=1 against Chaat Corner before Prava."
+        ? "CDP browser automation is available for constrained browser input. Prefer LLM-controlled browser flow; use helpers only for no-submit diagnostics or iframe typing."
         : "Use native browser automation if the host provides it; otherwise fix the failed checks or fall back to manual card-field entry.",
     checks,
   };

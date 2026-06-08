@@ -29,15 +29,15 @@ Chaat Corner checkout requires entering card details into Spreedly secure iframe
 2. A local Chrome/Chromium process with DevTools Protocol access.
 3. User manual entry as a fallback.
 
-Prefer a real browser/CDP route when available. Use the in-app browser for menu/cart discovery if it works, but switch to the bundled CDP script when iframe input is blocked.
+Prefer native browser/computer-use control when available. CDP is a transport fallback for user-like browser input, not a replacement for model reasoning. The LLM must still inspect the page before and after helper use.
 
 ## Browser Automation Decision Tree
 
 Use this before creating Prava credentials in a new host:
 
-1. **Native browser tool available**: If the host exposes browser/computer-use/playwright tools, run a harmless checkout dry run or equivalent host-native probe. The important capability is user-like click/type into the visible Spreedly card number and CVV iframes, not DOM access inside those frames.
-2. **Native browser tool blocked at Spreedly**: If clicks or keyboard input into cross-origin iframes fail, do not try to bypass the iframe. Run the CDP precheck below.
-3. **No native browser tool**: Run the CDP precheck below. If it passes, use `chaat-corner-cdp-checkout.mjs` for checkout.
+1. **Native browser tool available**: Use it for menu discovery, cart building, contact fields, opt-out checkboxes, page verification, and final submit. The important payment capability is user-like click/type into the visible Spreedly card number and CVV iframes, not DOM access inside those frames.
+2. **Native browser tool blocked at Spreedly**: If clicks or keyboard input into cross-origin iframes fail, do not try to bypass the iframe. Run the CDP precheck below, then use CDP only as a constrained input helper after the LLM verifies page state.
+3. **No native browser tool**: Run the CDP precheck below. If it passes, use a CDP-controlled browser with the same observe/act/verify discipline. Use `chaat-corner-cdp-checkout.mjs` only as a no-submit diagnostic/fallback helper.
 4. **No CDP/browser route**: Stop before creating Prava credentials. Ask the user to provide a controllable browser session or complete card-field entry manually after Prava approval.
 
 Run the dependency-free CDP precheck:
@@ -107,14 +107,14 @@ CDP_URL="http://127.0.0.1:9222"
 ### Codex
 
 - Use Browser/in-app browser for ordinary inspection when available.
-- If in-app browser cannot enter Spreedly iframes, use the CDP script.
+- If in-app browser cannot enter Spreedly iframes, use CDP as a constrained input route after the LLM verifies checkout state.
 - Shell commands that open Chrome or use local debug ports may need escalation/approval.
 - Do not leave temporary checkout scripts or Prava tokens in files.
 
 ### Claude Code
 
 - Use Claude Code browser/computer-use/Playwright tools if they are available and can type into the visible Spreedly card iframes.
-- If native tools cannot type into those iframes, run `browser-automation-precheck.mjs`, then the Node CDP checkout script if precheck passes.
+- If native tools cannot type into those iframes, run `browser-automation-precheck.mjs`, then use CDP only for no-submit diagnostics or constrained card-field input.
 - Ask for permission before launching a local Chrome window or controlling an existing one.
 - If Claude Code is running in a terminal-only remote host without GUI/Chrome/CDP, stop before Prava and ask for a controllable browser or manual-entry path.
 
@@ -122,7 +122,7 @@ CDP_URL="http://127.0.0.1:9222"
 
 - Use available browser automation if configured.
 - If Gemini has no browser tool or cannot enter Spreedly iframes, run `browser-automation-precheck.mjs`.
-- Use the Node CDP script with `CHROME_PATH` if Gemini's shell PATH cannot find Chrome.
+- Use `CHROME_PATH` for CDP helpers if Gemini's shell PATH cannot find Chrome.
 - If Gemini runs in a restricted environment with no GUI browser, stop before creating Prava credentials and ask the user for a controllable browser/manual-entry path.
 
 ### Other CLI Agents
@@ -134,11 +134,11 @@ The script has no npm dependencies. It needs:
 - Permission to open/control a local browser process
 - Network access to Chaat Corner and Prava
 
-If the host provides browser-use, computer-use, Playwright, Selenium, or MCP browser tools, use those first only if they can send real input to cross-origin iframe fields. If they expose DOM-only evaluation, expect Spreedly to remain inaccessible and use CDP instead.
+If the host provides browser-use, computer-use, Playwright, Selenium, or MCP browser tools, use those first only if they can send real input to cross-origin iframe fields. If they expose DOM-only evaluation, expect Spreedly to remain inaccessible and use CDP for input mechanics, with the LLM still controlling state inspection and final decisions.
 
 ## Preflight Without Prava
 
-Use dry run to validate that browser automation can reach the checkout, type into Spreedly card fields, and verify the cart before creating short-lived Prava credentials. Use a harmless single live menu item from the official menu and `DRY_RUN=1`; the script must stop at `stage: "pre-submit-ok"` and must not place an order:
+Use dry run to validate that browser automation can reach the checkout, type into Spreedly card fields, and verify the cart before creating short-lived Prava credentials. Use a harmless single live menu item from the official menu and `DRY_RUN=1`; the helper must stop at `stage: "pre-submit-ok"` and must not place an order:
 
 ```bash
 DRY_RUN=1 \
@@ -154,7 +154,9 @@ EXPECTED_TIP="0.00" \
 node <skill-dir>/scripts/chaat-corner-cdp-checkout.mjs
 ```
 
-Do not use Prava credentials for preflight. Do not use test card values for a real order. For real checkout, use Prava tokenized credentials returned by `prava sessions poll`.
+Do not use Prava credentials for preflight. Do not use test card values for a real order. For real checkout, use Prava tokenized credentials returned by `prava sessions poll`, then have the LLM/browser agent re-verify the checkout page before final submit.
+
+`chaat-corner-cdp-checkout.mjs` stops before final submit by default even when `DRY_RUN` is omitted. It submits only when `ALLOW_SCRIPT_FINAL_SUBMIT=1` is explicitly set. Avoid that flag in ordinary use; it exists as an emergency/manual override, not the skill's preferred path.
 
 ## Cleanup
 

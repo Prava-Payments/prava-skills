@@ -13,6 +13,7 @@ const cfg = {
   items: parseOrderItems(),
   expectedTotal: process.env.EXPECTED_TOTAL,
   expectedTip: env("EXPECTED_TIP", "0.00"),
+  scheduleEarliestIfUnavailable: boolEnv("SCHEDULE_EARLIEST_IF_UNAVAILABLE"),
   contactName: requiredEnv("CONTACT_NAME"),
   contactEmail: requiredEnv("CONTACT_EMAIL"),
   contactPhone: normalizeUsPhone(requiredEnv("CONTACT_PHONE")),
@@ -21,6 +22,7 @@ const cfg = {
   cardExpiry: normalizeExpiry(env("CARD_EXPIRY", "")),
   cardZip: requiredEnv("CARD_ZIP"),
   dryRun: boolEnv("DRY_RUN"),
+  allowFinalSubmit: boolEnv("ALLOW_SCRIPT_FINAL_SUBMIT"),
   cdpUrl: process.env.CDP_URL,
   cdpPort: Number(env("CDP_PORT", String(43000 + Math.floor(Math.random() * 10000)))),
   chromePath: process.env.CHROME_PATH,
@@ -419,7 +421,7 @@ async function main() {
   }
 
   await cdp.send("Page.navigate", { url: cfg.menuUrl });
-  await waitFor(`document.body && document.body.innerText.includes(${jsString(cfg.items[0].name)})`, 40000);
+  await ensureMenuAvailableForItem(cfg.items[0].name);
 
   await evalValue(`(() => {
     try { localStorage.clear(); } catch (e) {}
@@ -432,7 +434,47 @@ async function main() {
     return true;
   })()`);
   await cdp.send("Page.navigate", { url: cfg.menuUrl });
-  await waitFor(`document.body && document.body.innerText.includes(${jsString(cfg.items[0].name)})`, 40000);
+  await ensureMenuAvailableForItem(cfg.items[0].name);
+
+  async function ensureMenuAvailableForItem(itemName) {
+    await waitFor(
+      `(() => {
+        const text = document.body?.innerText || '';
+        return text.includes(${jsString(itemName)}) || text.includes('Menu currently unavailable') || text.includes('Schedule for');
+      })()`,
+      40000
+    );
+
+    const status = await evalValue(`(() => {
+      const text = document.body?.innerText || '';
+      const schedule = [...document.querySelectorAll('button')]
+        .map((button) => button.innerText.trim())
+        .find((text) => text.startsWith('Schedule for '));
+      return {
+        hasItem: text.includes(${jsString(itemName)}),
+        unavailable: text.includes('Menu currently unavailable'),
+        schedule
+      };
+    })()`);
+
+    if (status.hasItem) return;
+
+    if (!cfg.scheduleEarliestIfUnavailable || !status.schedule) {
+      throw new Error(
+        `Menu is unavailable and ${itemName} is not visible. ` +
+          `Set SCHEDULE_EARLIEST_IF_UNAVAILABLE=1 to use the earliest scheduled pickup option.`
+      );
+    }
+
+    await evalValue(`(() => {
+      const button = [...document.querySelectorAll('button')]
+        .find((button) => button.innerText.trim() === ${jsString(status.schedule)});
+      if (!button) return false;
+      button.click();
+      return true;
+    })()`);
+    await waitFor(`document.body && document.body.innerText.includes(${jsString(itemName)})`, 40000);
+  }
 
   async function addMenuItem(item, index) {
     if (index > 0) {
@@ -523,6 +565,28 @@ async function main() {
     return true;
   })()`);
 
+  async function checkoutDebug() {
+    return evalValue(`(() => ({
+      url: location.href,
+      title: document.title,
+      iframes: [...document.querySelectorAll('iframe')].map((frame) => ({
+        id: frame.id || null,
+        title: frame.title || null,
+        src: frame.src || null
+      })),
+      paymentInputs: {
+        expiry: Boolean(document.querySelector('#spreedly-expiry')),
+        zip: Boolean(document.querySelector('#spreedly-zip'))
+      },
+      text: (document.body?.innerText || '').slice(0, 2500)
+    }))()`);
+  }
+
+  await waitFor(
+    `document.querySelector('iframe[id^="spreedly-number-frame"]')`,
+    60000
+  ).catch(() => {});
+
   const numberRect = await evalValue(`(() => {
     const iframe = document.querySelector('iframe[id^="spreedly-number-frame"]');
     if (!iframe) return null;
@@ -530,7 +594,9 @@ async function main() {
     const r = iframe.getBoundingClientRect();
     return { x: r.x, y: r.y, w: r.width, h: r.height };
   })()`);
-  if (!numberRect) throw new Error("Could not find Spreedly number iframe.");
+  if (!numberRect) {
+    throw new Error(`Could not find Spreedly number iframe: ${JSON.stringify(await checkoutDebug())}`);
+  }
   await sleep(500);
   await clickPoint(numberRect.x + Math.min(90, numberRect.w / 2), numberRect.y + numberRect.h / 2);
   await cdp.send("Input.insertText", { text: cfg.cardNumber });
@@ -552,6 +618,7 @@ async function main() {
       .find(b => b.text.includes('Place Order'));
     return {
       url: location.href,
+      pickup: document.body.innerText.match(/Pickup\\s+[^\\n]+/)?.[0] || null,
       hasInvalidPayment: document.body.innerText.includes('Invalid payment'),
       total: document.body.innerText.match(/Order Total\\s*\\$[0-9.]+/)?.[0] || null,
       tip: document.body.innerText.match(/Tip\\s*\\$[0-9.]+/)?.[0] || null,
@@ -577,16 +644,18 @@ async function main() {
         stage: "pre-submit-ok",
         total: preSubmit.total,
         tip: preSubmit.tip,
+        pickup: preSubmit.pickup,
         items: cfg.items,
         phoneSubmitted: cfg.contactPhone,
         dryRun: cfg.dryRun,
+        finalSubmitAllowed: cfg.allowFinalSubmit,
       },
       null,
       2
     )
   );
 
-  if (cfg.dryRun) return;
+  if (cfg.dryRun || !cfg.allowFinalSubmit) return;
 
   await evalValue(`(() => {
     const place = [...document.querySelectorAll('button')].find(b => b.innerText.includes('Place Order -'));
