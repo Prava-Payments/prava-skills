@@ -18,6 +18,9 @@ import {
   shopProductCommand,
   shopQuoteCommand,
   shopCheckoutCommand,
+  shopAddressListCommand,
+  shopAddressAddCommand,
+  shopAddressDefaultCommand,
 } from './commands/shop.js';
 
 const program = new Command();
@@ -139,6 +142,7 @@ shop
   .requiredOption('--merchant <domain>', 'Merchant domain')
   .option('--quantity <n>', 'Quantity (default 1)')
   .option('--email <email>', 'Buyer email (optional)')
+  .option('--address-id <id>', "Which saved address to ship to (default: the user's default address)")
   .option('--retries <n>', 'Retry on timeout/server error (default 1; 0 to disable)')
   .option('-y, --yes', 'Confirm — pass ONLY after the user has approved the seller/variant')
   .option('--json', 'Output raw JSON (for chaining)')
@@ -148,10 +152,63 @@ shop
       merchant: opts.merchant,
       quantity: opts.quantity ? parseInt(opts.quantity, 10) : undefined,
       email: opts.email,
+      addressId: opts.addressId,
       retries: opts.retries !== undefined ? parseInt(opts.retries, 10) : undefined,
       yes: opts.yes,
       json: opts.json,
     });
+  });
+
+const shopAddress = shop
+  .command('address')
+  .description('Manage delivery addresses (stored per user; the agent only ever sees masked summaries)');
+
+shopAddress
+  .command('list')
+  .description('List saved delivery addresses (masked)')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => {
+    await shopAddressListCommand({ json: opts.json });
+  });
+
+shopAddress
+  .command('add')
+  .description('Add a delivery address (fallback; primary entry is the Prava dashboard)')
+  .requiredOption('--first-name <name>', 'Recipient first name')
+  .requiredOption('--last-name <name>', 'Recipient last name')
+  .requiredOption('--line1 <street>', 'Street address line 1')
+  .option('--line2 <street>', 'Street address line 2')
+  .requiredOption('--city <city>', 'City / locality')
+  .requiredOption('--region <region>', 'State / province / region')
+  .requiredOption('--postal <code>', 'Postal / ZIP code')
+  .requiredOption('--country <code>', 'ISO 3166-1 alpha-2 country (e.g., US)')
+  .option('--label <label>', 'Label, e.g. "Home"')
+  .option('--phone <phone>', 'Contact phone WITH country code, e.g. "+91 98765 43210" or "+1 415 555 0100" (stored on your account, not per-address)')
+  .option('--default', 'Make this the default address')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => {
+    await shopAddressAddCommand({
+      label: opts.label,
+      firstName: opts.firstName,
+      lastName: opts.lastName,
+      line1: opts.line1,
+      line2: opts.line2,
+      city: opts.city,
+      region: opts.region,
+      postal: opts.postal,
+      country: opts.country,
+      phone: opts.phone,
+      default: opts.default,
+      json: opts.json,
+    });
+  });
+
+shopAddress
+  .command('set-default')
+  .description('Set an address as the default')
+  .requiredOption('--address-id <id>', 'address-id from `address list`')
+  .action(async (opts) => {
+    await shopAddressDefaultCommand({ addressId: opts.addressId });
   });
 
 shop

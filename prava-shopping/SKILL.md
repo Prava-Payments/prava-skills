@@ -1,6 +1,6 @@
 ---
 name: prava-shopping
-version: 1.4.0
+version: 1.5.0
 
 description: Use when the user wants Prava to FIND and BUY a physical product for them — "shop for X", "find me a X to buy", "buy X online", "order this", "check out my cart" — i.e. discover products across merchants (search → product → quote) and pay with a tokenized card (checkout). Do NOT use for: general research or browsing that isn't about buying a product (restaurants, travel, info, "find me a library/API"); when the user already picked a specific item from a specific store elsewhere or says "just pay / I'll find it myself" (use prava-pay to pay at that merchant); peer-to-peer payments; bills you already have a link for; or general Prava product questions (use prava-pay).
 homepage: https://prava.space
@@ -111,9 +111,34 @@ Prices are item-only; shipping is added at quote. So:
 - `quote` the chosen offer with **that offer's OWN merchant** (shown on its row) — not necessarily
   the merchant you searched.
 
+### 2.5 Delivery address (required before quote)
+`quote` ships to the user's saved address; the wallet injects it **server-side**, so you (the agent)
+never handle the raw address/phone. Check what's on file:
+```bash
+prava shop address list   # MASKED: label · "•••• St, City RG •••NN, US" · address-id · [default]
+```
+- Default exists (or the user names one) → proceed to quote (optionally `--address-id <id>` for a
+  non-default one).
+- **None on file** → the user must add one. **Prefer the Prava dashboard** (most secure — PII never
+  passes through you): give them the dashboard URL, ask them to add an address + phone, then re-run
+  `address list`. **Fallback:** they dictate it and you store it via `prava shop address add`. When
+  you ask, collect **all** of these:
+  - **First & last name** (recipient)
+  - **Street** — line 1 (and line 2 if any)
+  - **City, State/region, ZIP/postal**
+  - **Country** (ISO-2, e.g. US, IN, GB)
+  - **Phone — with the country dialing code** (e.g. `+91 98765 43210`, `+1 415 555 0100`). Always ask
+    for the leading `+<code>`; if the user gives a bare number, ask which country code (+91, +1, …).
+  Then: `prava shop address add --first-name … --last-name … --line1 … [--line2 …] --city … --region … --postal … --country US --phone "+1 415 555 0100" --default`.
+- **PII rule — never read back, repeat, or log a full address or phone.** You only ever get masked
+  summaries; refer to addresses by **label / address-id**.
+- `quote`/`checkout` return `SHOP_ADDRESS_REQUIRED` / `SHOP_CONTACT_REQUIRED` when missing — relay the
+  message and point the user to the dashboard.
+
 ### 3. Quote → exact price
-**Run this only after the user has confirmed the offer in step 2.** The CLI enforces it: `quote`
-**refuses without `--yes`** — pass `--yes` only once the user has picked the seller/variant.
+**Run this only after the user has confirmed the offer (step 2) and an address is on file (step 2.5).**
+The CLI enforces the offer step: `quote` **refuses without `--yes`** — pass `--yes` only once the user
+has picked the seller/variant.
 ```bash
 prava shop quote --variant-id "<variant_id>" --merchant <merchant> [--quantity 1] --yes
 ```
@@ -133,7 +158,8 @@ total aren't known until the quote. Before any spending action, present and get 
 
 - the **item** — title + one-line description,
 - the **seller** (merchant) and the **variant** you're about to buy,
-- the **quantity**, and
+- the **quantity**,
+- the **ship-to** address — **by its label/masked summary only** (never the full address), and
 - the **final total incl. shipping** (from the quote).
 
 Only after an explicit confirmation do you mint the card session or check out. If the user hasn't

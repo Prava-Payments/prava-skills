@@ -154,6 +154,109 @@ function centsToDollars(cents: number | null | undefined): string {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// addresses (PII-safe: the agent only ever sees MASKED summaries; full address is
+// hydrated server-side at quote time and never returned here)
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface MaskedAddress {
+  id: string;
+  label: string | null;
+  summary: string;
+  isDefault: boolean;
+}
+
+export async function shopAddressListCommand(opts: { json?: boolean }): Promise<void> {
+  const id = await requireAgent();
+  const res = await shopClient().request<{ addresses?: MaskedAddress[]; has_phone?: boolean; error?: unknown }>({
+    method: 'POST',
+    path: '/v1/wallet/shop/addresses/list',
+    body: {},
+    ...id,
+  });
+  if (res.status !== 200) {
+    console.error(`\nrequest failed: ${pickError(res.data) ?? `HTTP ${res.status}`}`);
+    process.exit(1);
+  }
+  if (opts.json) {
+    console.log(JSON.stringify(res.data, null, 2));
+    return;
+  }
+  const addresses = res.data.addresses ?? [];
+  if (addresses.length === 0) {
+    console.log('No delivery addresses on file. Add one in the Prava dashboard, or `prava shop address add`.');
+  } else {
+    console.log(`\n${addresses.length} saved address${addresses.length === 1 ? '' : 'es'} (masked):\n`);
+    addresses.forEach((a, i) => {
+      console.log(`  ${i + 1}. ${a.label ?? '(no label)'}${a.isDefault ? '  [default]' : ''}`);
+      console.log(`     ${a.summary}`);
+      console.log(`     address-id: ${a.id}`);
+    });
+  }
+  if (res.data.has_phone === false) console.log('\n⚠ No contact phone on file — add one (dashboard, or `--phone` on `address add`).');
+}
+
+export async function shopAddressAddCommand(opts: {
+  label?: string;
+  firstName: string;
+  lastName: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  region: string;
+  postal: string;
+  country: string;
+  phone?: string;
+  default?: boolean;
+  json?: boolean;
+}): Promise<void> {
+  const id = await requireAgent();
+  const res = await shopClient().request<{ address?: MaskedAddress; error?: unknown }>({
+    method: 'POST',
+    path: '/v1/wallet/shop/addresses',
+    body: {
+      label: opts.label,
+      firstName: opts.firstName,
+      lastName: opts.lastName,
+      street: opts.line1,
+      ...(opts.line2 ? { street2: opts.line2 } : {}),
+      locality: opts.city,
+      region: opts.region,
+      postalCode: opts.postal,
+      country: opts.country,
+      ...(opts.phone ? { phone: opts.phone } : {}),
+      isDefault: opts.default,
+    },
+    ...id,
+  });
+  if (res.status !== 201 && res.status !== 200) {
+    console.error(`\nrequest failed: ${pickError(res.data) ?? `HTTP ${res.status}`}`);
+    process.exit(1);
+  }
+  if (opts.json) {
+    console.log(JSON.stringify(res.data, null, 2));
+    return;
+  }
+  const a = res.data.address;
+  console.log(`\n✓ Address saved${a?.isDefault ? ' (default)' : ''}.`);
+  if (a) console.log(`  ${a.label ?? '(no label)'} — ${a.summary}\n  address-id: ${a.id}`);
+}
+
+export async function shopAddressDefaultCommand(opts: { addressId: string }): Promise<void> {
+  const id = await requireAgent();
+  const res = await shopClient().request<{ success?: boolean; error?: unknown }>({
+    method: 'POST',
+    path: '/v1/wallet/shop/addresses/default',
+    body: { addressId: opts.addressId },
+    ...id,
+  });
+  if (res.status !== 200) {
+    console.error(`\nrequest failed: ${pickError(res.data) ?? `HTTP ${res.status}`}`);
+    process.exit(1);
+  }
+  console.log('✓ Default address updated.');
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // search
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -312,6 +415,7 @@ export async function shopQuoteCommand(opts: {
   merchant: string;
   quantity?: number;
   email?: string;
+  addressId?: string;
   retries?: number;
   yes?: boolean;
   json?: boolean;
@@ -326,6 +430,9 @@ export async function shopQuoteCommand(opts: {
     variant_id: opts.variantId,
     merchantDomain: opts.merchant,
     quantity: opts.quantity ?? 1,
+    // address is resolved server-side by the wallet (PII never travels via the agent); we only
+    // optionally select WHICH saved address by id. Default address is used when omitted.
+    ...(opts.addressId ? { address_id: opts.addressId } : {}),
   };
   if (opts.email) body.email = opts.email;
 

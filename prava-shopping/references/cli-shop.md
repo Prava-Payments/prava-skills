@@ -105,12 +105,35 @@ prava shop checkout --checkout-session-id checkout_7d5b… \
 
 ---
 
+## `prava shop address`
+
+Per-user delivery address book. **The agent only ever sees MASKED summaries** — the wallet stores
+full rows and hydrates them server-side at quote time; full address/phone are never returned to the
+CLI. Primary entry is the **Prava dashboard**; these commands are a fallback / for selection.
+
+| Command | Notes |
+|---|---|
+| `list [--json]` | Masked list: `label · summary (e.g. "•••• Hacker Way, Menlo Park CA •••25, US") · address-id · [default]`. Also reports if a contact phone is missing. |
+| `add` | Fallback write. Flags: `--first-name --last-name --line1 [--line2] --city --region --postal --country` (required), `--label --phone --default` (optional). `--phone` is stored on your **account** (not per-address). Returns the masked saved address. |
+| `set-default --address-id <id>` | Make a saved address the default. |
+
+`quote` uses the **default** address unless you pass `--address-id <id>`. Email comes from your Prava
+account; phone from your account (set via `--phone` or the dashboard). Missing address/phone →
+`quote` returns `SHOP_ADDRESS_REQUIRED` / `SHOP_CONTACT_REQUIRED`.
+
+```bash
+prava shop address list
+prava shop address add --first-name Ada --last-name Lovelace --line1 "1 Analytical Way" \
+  --city London --region London --postal EC1A1BB --country GB --phone "+442071234567" --default
+```
+
 ## Full flow
 
 ```bash
 prava shop search  --query "coffee" --intent "<the user's full request>"
 prava shop product --product-id "<id>" --merchant <m>     # STOP — user confirms the seller/variant
-prava shop quote   --variant-id "<vid>" --merchant <m> --yes
+prava shop address list                                   # ensure a default address (else dashboard / address add)
+prava shop quote   --variant-id "<vid>" --merchant <m> --yes   # ships to default; --address-id <id> to pick
 # → mint a card session for the quoted total, user approves, poll for the token:
 prava sessions create --total-amount "<total>" --currency USD --merchant-name "<m>" \
   --merchant-url "https://<m>" --merchant-country US \
