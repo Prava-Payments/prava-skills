@@ -9,3 +9,5 @@ prava-pay/evals/results/
 prava-pay/evals/results-about/
 prava-sdk-integration/evals/results/
 evals/results/
+# shop-e2e tester local agent key (holds a private key)
+testing-flow/shop-e2e/.agent.local.json

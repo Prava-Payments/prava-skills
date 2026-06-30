@@ -1,8 +1,8 @@
 ---
 name: prava-pay
-version: 2.2.0
+version: 2.3.0
 
-description: Use when the user asks to buy something, make a purchase, pay for an order/bill, set up Prava, link a card, or use Prava. Also use for first-party Prava product questions about what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, or KYC. Do NOT use for peer-to-peer payments, provider comparisons, or general payment-industry questions. Drives the Prava CLI to link an AI agent to a Prava account and retrieve tokenized card credentials for agent-initiated merchant purchases.
+description: Use when the user asks to buy something they've already chosen, pay for an order/bill, set up Prava, link a card, or use Prava. Also use for first-party Prava product questions about what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, or KYC. Do NOT use for peer-to-peer payments, provider comparisons, general payment-industry questions, or when the user wants Prava to FIND/SEARCH a product to buy (use the prava-shopping skill — it does discovery → quote → checkout). Drives the Prava CLI to link an AI agent to a Prava account and retrieve tokenized card credentials for agent-initiated merchant purchases.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
@@ -29,6 +29,8 @@ Activate this skill when:
 - The user asks to set up Prava or connect their card for agent purchases
 - The user says "pay with Prava", "use Prava", or similar
 - The user asks general questions about Prava as a product or company (what it is, how it works, security, pricing, supported cards, mandates, passkeys, refunds, etc.) — see "Answering Questions About Prava" below
+
+**Discovery vs. payment (hand-off to prava-shopping):** if the user wants Prava to **find/search** a product to buy (they haven't chosen a specific item/merchant yet — "shop for / find me / buy me a \<product\>"), that's the **prava-shopping** skill (it does search → product → quote → checkout). This skill, prava-pay, is for **completing payment once the product + merchant + price are known** — a bill, an order they've finalized, or a checkout you're already on. The two share the same CLI, onboarding, and `prava sessions` mint, so once prava-shopping reaches its payment step it uses exactly the flow documented here.
 
 ## Answering Questions About Prava (Company / Product)
 

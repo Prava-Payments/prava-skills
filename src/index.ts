@@ -13,13 +13,19 @@ import { Command } from 'commander';
 import { setupCommand, setupPollCommand } from './commands/setup.js';
 import { statusCommand } from './commands/status.js';
 import { sessionsCreateCommand, sessionsPollCommand } from './commands/sessions.js';
+import {
+  shopSearchCommand,
+  shopProductCommand,
+  shopQuoteCommand,
+  shopCheckoutCommand,
+} from './commands/shop.js';
 
 const program = new Command();
 
 program
   .name('prava')
   .description('Prava CLI — smart wallet for AI agents')
-  .version('2.0.0');
+  .version('3.0.0');
 
 const setup = program
   .command('setup')
@@ -84,6 +90,92 @@ sessions
   .requiredOption('--session-id <id>', 'Session ID from sessions create')
   .action(async (opts) => {
     await sessionsPollCommand({ sessionId: opts.sessionId });
+  });
+
+const shop = program
+  .command('shop')
+  .description('Product discovery and checkout');
+
+shop
+  .command('search')
+  .description('Search for products across merchants')
+  .requiredOption('--query <text>', 'Tight keyword query (e.g., "dark roast coffee")')
+  .option('--intent <text>', "The user's full natural-language request (gift context, occasion, budget phrasing) — passed to UCP as buyer intent for better ranking")
+  .option('--limit <n>', 'Max results (default 10)')
+  .option('--cursor <cursor>', 'Next-page cursor from a previous search')
+  .option('--merchant <domain>', 'Restrict to one merchant domain')
+  .option('--ships-to <country>', 'ISO 3166-1 alpha-2 destination (e.g., US)')
+  .option('--json', 'Output raw JSON (for chaining)')
+  .action(async (opts) => {
+    await shopSearchCommand({
+      query: opts.query,
+      intent: opts.intent,
+      limit: opts.limit ? parseInt(opts.limit, 10) : undefined,
+      cursor: opts.cursor,
+      merchant: opts.merchant,
+      shipsTo: opts.shipsTo,
+      json: opts.json,
+    });
+  });
+
+shop
+  .command('product')
+  .description("Show a product's details and variants")
+  .requiredOption('--product-id <id>', 'product-id from search results')
+  .option('--merchant <domain>', 'Merchant domain (from the search result)')
+  .option('--json', 'Output raw JSON (for chaining)')
+  .action(async (opts) => {
+    await shopProductCommand({
+      productId: opts.productId,
+      merchant: opts.merchant,
+      json: opts.json,
+    });
+  });
+
+shop
+  .command('quote')
+  .description('Price a variant and open a checkout session')
+  .requiredOption('--variant-id <id>', 'variant-id from product details')
+  .requiredOption('--merchant <domain>', 'Merchant domain')
+  .option('--quantity <n>', 'Quantity (default 1)')
+  .option('--email <email>', 'Buyer email (optional)')
+  .option('--retries <n>', 'Retry on timeout/server error (default 1; 0 to disable)')
+  .option('-y, --yes', 'Confirm — pass ONLY after the user has approved the seller/variant')
+  .option('--json', 'Output raw JSON (for chaining)')
+  .action(async (opts) => {
+    await shopQuoteCommand({
+      variantId: opts.variantId,
+      merchant: opts.merchant,
+      quantity: opts.quantity ? parseInt(opts.quantity, 10) : undefined,
+      email: opts.email,
+      retries: opts.retries !== undefined ? parseInt(opts.retries, 10) : undefined,
+      yes: opts.yes,
+      json: opts.json,
+    });
+  });
+
+shop
+  .command('checkout')
+  .description('Pay for a quoted checkout session with a card token')
+  .requiredOption('--checkout-session-id <id>', 'checkout-session-id from quote')
+  .requiredOption('--token <token>', 'Network token from `prava sessions poll`')
+  .requiredOption('--cryptogram <crypt>', 'Dynamic CVV from `prava sessions poll`')
+  .option('--expiry-month <mm>', 'Card expiry month (MM)')
+  .option('--expiry-year <yyyy>', 'Card expiry year (YYYY)')
+  .option('--cardholder-name <name>', 'Cardholder name')
+  .option('-y, --yes', 'Confirm the charge — pass ONLY after the user has approved the final total')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => {
+    await shopCheckoutCommand({
+      checkoutSessionId: opts.checkoutSessionId,
+      token: opts.token,
+      cryptogram: opts.cryptogram,
+      expiryMonth: opts.expiryMonth,
+      expiryYear: opts.expiryYear,
+      cardholderName: opts.cardholderName,
+      yes: opts.yes,
+      json: opts.json,
+    });
   });
 
 program.parse();

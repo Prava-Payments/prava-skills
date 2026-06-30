@@ -18,6 +18,8 @@ interface RequestOptions {
   body?: Record<string, unknown>;
   agentId?: string;
   privateKey?: string;
+  /** Per-request timeout override (ms). Defaults to config.requestTimeoutMs. */
+  timeoutMs?: number;
 }
 
 interface ApiResponse<T = unknown> {
@@ -132,7 +134,7 @@ export class PravaClient {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+    const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? config.requestTimeoutMs);
 
     try {
       const response = await fetch(url, {

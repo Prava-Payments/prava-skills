@@ -119,6 +119,66 @@
       "prompt": "Does Prava work in India or with UPI?",
       "expected": "prava-pay",
       "category": "wallet-qa"
+    },
+    {
+      "id": 21,
+      "prompt": "Find me a good 12oz dark roast coffee and buy it.",
+      "expected": "prava-shopping",
+      "category": "shop-positive"
+    },
+    {
+      "id": 22,
+      "prompt": "Shop for a wireless mouse under $30 and order the best one.",
+      "expected": "prava-shopping",
+      "category": "shop-positive"
+    },
+    {
+      "id": 23,
+      "prompt": "I need a birthday gift for my girlfriend — find a nice hat and buy it for her.",
+      "expected": "prava-shopping",
+      "category": "shop-positive"
+    },
+    {
+      "id": 24,
+      "prompt": "Search for noise-cancelling headphones and check out the cheapest one in stock.",
+      "expected": "prava-shopping",
+      "category": "shop-positive"
+    },
+    {
+      "id": 25,
+      "prompt": "Use Prava to find and buy me a French press.",
+      "expected": "prava-shopping",
+      "category": "shop-adversarial"
+    },
+    {
+      "id": 26,
+      "prompt": "I already found this coffee on bonescoffee.com — just buy it for me.",
+      "expected": "prava-pay",
+      "category": "shop-vs-pay-boundary"
+    },
+    {
+      "id": 27,
+      "prompt": "I picked out a jacket on a store's website already; pay for it with my Prava card.",
+      "expected": "prava-pay",
+      "category": "shop-vs-pay-boundary"
+    },
+    {
+      "id": 28,
+      "prompt": "Find me a good Italian restaurant near downtown.",
+      "expected": "none",
+      "category": "shop-negative"
+    },
+    {
+      "id": 29,
+      "prompt": "Find me a lightweight charting library for my React app.",
+      "expected": "none",
+      "category": "shop-negative"
+    },
+    {
+      "id": 30,
+      "prompt": "Just research some good coffee brands for me — I'm not buying anything.",
+      "expected": "none",
+      "category": "shop-negative"
     }
   ]
 }
