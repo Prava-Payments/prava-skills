@@ -2,7 +2,8 @@
 name: prava-shopping
 version: 1.5.0
 
-description: Use when the user wants Prava to FIND and BUY a physical product for them — "shop for X", "find me a X to buy", "buy X online", "order this", "check out my cart" — i.e. discover products across merchants (search → product → quote) and pay with a tokenized card (checkout). Do NOT use for: general research or browsing that isn't about buying a product (restaurants, travel, info, "find me a library/API"); when the user already picked a specific item from a specific store elsewhere or says "just pay / I'll find it myself" (use prava-pay to pay at that merchant); peer-to-peer payments; bills you already have a link for; or general Prava product questions (use prava-pay).
+description: >-
+  Use when the user wants Prava to FIND and BUY a physical product for them — "shop for X", "find me a X to buy", "buy X online", "order this", "check out my cart" — i.e. discover products across merchants (search → product → quote) and pay with a tokenized card (checkout). Do NOT use for: general research or browsing that isn't about buying a product (restaurants, travel, info, "find me a library/API"); when the user already picked a specific item from a specific store elsewhere or says "just pay / I'll find it myself" (use prava-pay to pay at that merchant); peer-to-peer payments; bills you already have a link for; or general Prava product questions (use prava-pay).
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
