@@ -82,19 +82,22 @@ export function cliVersionVerdict(
  * Decide whether to warn about the skill version. The CLI cannot read the
  * agent's LOADED skill version on its own, so the agent passes it via the
  * PRAVA_SKILL_VERSION env var (sourced from its SKILL.md frontmatter).
- *   - 'ok'   — agent reported a skill version >= the server minimum → stay silent
- *   - 'warn' — agent's skill is behind, OR no version was supplied → surface it
+ *   - 'ok'      — agent reported a version >= the server minimum → stay silent
+ *   - 'behind'  — agent reported a version and it's below the minimum → genuinely outdated
+ *   - 'unknown' — no version supplied → we cannot tell; do NOT claim "update required"
+ *
+ * Splitting 'behind' from 'unknown' matters: it lets the CLI print an accurate
+ * message the skill can trust literally, instead of a blanket "update required"
+ * that also fires whenever the agent merely forgot the PRAVA_SKILL_VERSION prefix.
  *
  * Pure + exported for unit testing.
  */
 export function skillVersionVerdict(
   loadedVersion: string | undefined,
   minVersion: string,
-): 'ok' | 'warn' {
-  if (loadedVersion && compareSemver(loadedVersion, minVersion) >= 0) {
-    return 'ok';
-  }
-  return 'warn';
+): 'ok' | 'behind' | 'unknown' {
+  if (!loadedVersion) return 'unknown';
+  return compareSemver(loadedVersion, minVersion) >= 0 ? 'ok' : 'behind';
 }
 
 // Per-process de-dupe so poll loops (many requests in one command) don't repeat
@@ -196,16 +199,27 @@ export class PravaClient {
 
   private checkSkillVersion(minSkillVersion: string): void {
     // The agent passes its loaded skill version via PRAVA_SKILL_VERSION (from
-    // its SKILL.md frontmatter). If it's current, stay silent — otherwise the
-    // warning would fire on every call even for up-to-date users.
-    if (skillVersionVerdict(process.env['PRAVA_SKILL_VERSION'], minSkillVersion) === 'ok') {
+    // its SKILL.md frontmatter). Stay silent when current; otherwise print a
+    // message that says exactly what we know, so the skill needn't second-guess it.
+    const verdict = skillVersionVerdict(process.env['PRAVA_SKILL_VERSION'], minSkillVersion);
+    if (verdict === 'ok') return;
+
+    const skillName = process.env['PRAVA_SKILL_NAME'] || 'prava-pay';
+    if (verdict === 'behind') {
+      // We verified the reported version is actually below the minimum.
+      warnOnce(
+        'skill-version',
+        `\nSkill update required (minimum: ${minSkillVersion}).` +
+        `\nRun: npx skills update ${skillName} -g\n`,
+      );
       return;
     }
-    const skillName = process.env['PRAVA_SKILL_NAME'] || 'prava-pay';
+    // 'unknown' — no PRAVA_SKILL_VERSION reported, so we can't confirm the skill
+    // is current. Don't cry "required"; the usual cause is a forgotten prefix.
     warnOnce(
       'skill-version',
-      `\nSkill update required (minimum: ${minSkillVersion}).` +
-      `\nRun: npx skills update ${skillName} -g\n`,
+      `\nCould not verify skill version — PRAVA_SKILL_VERSION not set (server minimum: ${minSkillVersion}).` +
+      `\nAdd the PRAVA_SKILL_VERSION=<ver> prefix. If ${skillName} is genuinely older, run: npx skills update ${skillName} -g\n`,
     );
   }
 }

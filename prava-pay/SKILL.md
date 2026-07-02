@@ -64,19 +64,13 @@ If you find an existing `prava` binary, use its absolute path or prepend its `bi
 PATH=/path/to/prava/bin:$PATH PRAVA_SKILL_VERSION=<this skill's version> prava status
 ```
 
-Only if no existing `prava` binary is found should you install it:
+Only if no existing `prava` binary is found does it need installing — and **the user installs it, not you.** A global npm install (and the card/passkey setup that follows) should happen under the user's control, so ask them to run it rather than installing it yourself:
 
-```bash
-npm install -g @prava-sdk/cli
-```
+> The Prava CLI isn't installed. Please run `npm install -g @prava-sdk/cli` in your terminal, then tell me when it's done.
 
-If the install fails due to permissions, try:
+**Never run the install with `sudo` or otherwise elevate privileges.** If a plain `npm install -g` fails on permissions, that's the user's Node setup to sort out (an nvm/Homebrew node, or an npm prefix they own) — surface the error and let them handle it. Do not retry with `sudo`.
 
-```bash
-sudo npm install -g @prava-sdk/cli
-```
-
-After install, verify:
+Once the user confirms it's installed, verify:
 
 ```bash
 prava --version
@@ -87,7 +81,7 @@ prava --version
 The CLI automatically checks for updates on every API call. Watch for two notices in command output:
 
 - **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
-- **Skill update notice** — "Skill update required (minimum: X.Y.Z)". **Compare `X.Y.Z` to this skill's own `version:` (frontmatter). If your version is ≥ `X.Y.Z`, IGNORE it — you're current.** Only if your version is actually below `X.Y.Z` should you run `npx skills update prava-pay -g` before continuing.
+- **Skill update notice** — "Skill update required (minimum: X.Y.Z)". The CLI prints this **only after confirming the version you reported is actually below the minimum**, so trust it literally: run `npx skills update prava-pay -g`, then continue. (If instead you see "Could not verify skill version", you just forgot the `PRAVA_SKILL_VERSION=<ver>` prefix — add it and re-run; there's nothing to update.)
 
 **Always run `prava` with `PRAVA_SKILL_NAME=prava-pay` and `PRAVA_SKILL_VERSION=<this skill's version>`** (from the frontmatter) so the CLI reports which skill + version to the server and can verify per-skill compatibility (prava-pay and prava-shopping version independently). Prefix every `prava` invocation, e.g.:
 
@@ -95,7 +89,7 @@ The CLI automatically checks for updates on every API call. Watch for two notice
 PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<this skill's version> prava status
 ```
 
-If you forget the prefix, the CLI may print the skill-update notice even when you're current — that's why the compare rule above is the backstop.
+If you forget the prefix, the CLI can't confirm your version and prints "Could not verify skill version" (not "update required") — just add the prefix and re-run.
 
 Do not run separate version-check commands — the CLI handles this automatically.
 
@@ -105,12 +99,12 @@ Do not run separate version-check commands — the CLI handles this automaticall
 
 You MUST run these two commands, in this order, before any other prava command — never skip either:
 
-1. `which prava` — if missing, search common existing install locations first. Only run `npm install -g @prava-sdk/cli` if no existing binary is found (see Prerequisites above for sudo / verify fallbacks). Then proceed.
+1. `which prava` — if missing, search common existing install locations first. If still not found, ask the user to install it (see Prerequisites above — never install it yourself, and never use `sudo`). Then proceed.
 2. `prava status` — check agent link state.
 
 Decision tree based on `prava status` output (check in this order — first matching condition wins):
 
-- **CLI prints "Skill update required (minimum: X.Y.Z)"** — FIRST compare `X.Y.Z` against THIS skill's own version (the `version:` field in the frontmatter at the top of this file). **If this skill's version is greater than or equal to `X.Y.Z`, the warning is a false positive — IGNORE it completely and continue with the next matching condition below. You are already current.** Only if this skill's version is genuinely BELOW `X.Y.Z` is it a hard block: run `npx skills update prava-pay -g`, then run `prava status` again. If the SAME warning re-prints AND your version is still below `X.Y.Z`, the updated skill is not loaded in this session — tell the user: "I've updated the prava-pay skill, but most agent hosts only load skills at session start. Please restart your agent session (the host you're running in — for example Claude Code, Cursor, Codex, or whichever it is), then re-run your original request." Then STOP — do not proceed. (Do NOT say "restart the CLI" or "restart your machine" — it's the agent host process that needs to reload the skill.)
+- **CLI prints "Skill update required (minimum: X.Y.Z)"** — the CLI has verified the version you reported is genuinely below the minimum, so this is a real block: run `npx skills update prava-pay -g`, then run `prava status` again. If the SAME warning re-prints after updating, the new skill file is on disk but this session still has the old one loaded — tell the user: "I've updated the prava-pay skill, but most agent hosts only load skills at session start. Please restart your agent session (the host you're running in — for example Claude Code, Cursor, Codex, or whichever it is), then re-run your original request." Then STOP — do not proceed. (Do NOT say "restart the CLI" or "restart your machine" — it's the agent host process that needs to reload the skill.) *If instead the CLI says "Could not verify skill version", you simply omitted the `PRAVA_SKILL_VERSION=<ver>` prefix — add it and continue; you're not out of date.*
 - **"Link expired. Run `prava setup` again."** — the previous setup link is dead. Confirm with the user that they want a fresh setup link (one sentence: "The previous link expired. I'll generate a new one — confirm?"). On confirmation, run `prava setup --name "<name>" --platform <platform>` then IMMEDIATELY `prava setup poll`.
 - **"active"** — Move to step 2.
 - **"pending"** — A previous setup attempt is still pending and not expired. The CLI re-prints the link as `Link: <URL>` in this case. Show the URL to the user and IMMEDIATELY run `prava setup poll`. If the CLI does NOT include a URL on the `Link:` line (only "Waiting for approval."), the previous link is unrecoverable: confirm with the user once ("I see an unfinished setup attempt with no recoverable link. Generate a fresh one?"), then run `prava setup` to generate a new link.
@@ -193,6 +187,18 @@ Before calling `prava sessions create`, confirm you have ALL of:
 If ANY are missing, gather them FIRST through your normal discovery flow.
 Do NOT call `prava sessions create` with guessed or hallucinated values.
 
+### 2.5 Confirm with the user before spending — MANDATORY HARD STOP
+
+Before `prava sessions create`, present these to the user and get an explicit **"yes"**:
+
+- the **merchant** (name),
+- **what's being bought** (each product description), and
+- the **total amount and currency**.
+
+> "I'll pay **$8.50 USD** to **Blue Bottle Coffee** for 1 Latte + 1 Croissant — confirm?"
+
+Only after an explicit confirmation do you mint the session. **This gate lives in the conversation, where the user is actually reading** — the browser passkey approval is a *second* check, not a substitute for this one. Confirming here catches a wrong merchant or a mis-typed amount **before** it's baked into a payment session and shown on a passkey prompt the user may approve on autopilot. Do not skip it even if the user already said "buy X" — "buy X" is intent, not approval of a specific merchant and total.
+
 ### 3. Collect payment
 
 ```bash
@@ -238,8 +244,7 @@ Expiry:       12/2028
 - **Cryptogram** is a single-use dynamic CVV — use it where CVV is expected.
 - **Expiry** is the token's expiry date.
 
-Do NOT ask the user anything between steps 3 and 4.
-The credentials expire in 30 minutes. Complete checkout immediately.
+You already confirmed the merchant and total at the step 2.5 gate, so don't re-confirm here — the credentials are single-use and expire in 30 minutes, so complete checkout promptly once you have them.
 
 ## Troubleshooting: status stuck on "pending"
 
@@ -253,8 +258,7 @@ The "stuck pending" failure mode has been eliminated in CLI 1.1+ / skill 2.1+: `
 
 ## Important: This is a Payment Subroutine
 
-Steps 1-4 are a SINGLE unbreakable sequence within the larger purchase flow.
-The user's original intent (e.g., "buy coffee") must not be interrupted.
+There is exactly one place to stop for the user: the **step 2.5 confirmation gate**, before you mint the session. Once you have the tokenized credentials (after step 3's poll), the token is single-use and expires in 30 minutes — so from mint → poll → checkout, move promptly and don't pause. The confirmation happens *before* the credential exists, so this immediacy never runs ahead of the user's approval.
 
 **Multi-merchant requests** (e.g. "buy a book from Amazon AND a domain from Namecheap"): handle merchants one at a time. Run the full subroutine — `sessions create` → poll → checkout — for merchant A before starting merchant B. Each session's credentials are tied to a single merchant and expire in 30 minutes; do NOT parallelize `sessions create` calls, poll multiple sessions before any checkout, or batch checkouts at the end.
 
@@ -286,17 +290,19 @@ PRAVA_SKILL_VERSION=<ver> prava sessions poll --session-id <id>                 
 **Version check:** The Prava backend may require a minimum CLI version, and the CLI may require a minimum skill version. Two separate error families:
 
 - **CLI version error** — "Critical update required. Current: X, Required: Y" or similar. Run `npm update -g @prava-sdk/cli`, then retry the command that triggered the error.
-- **Skill version error** — "Skill update required (minimum: X.Y.Z)." **First compare `X.Y.Z` to this skill's own `version:` (frontmatter). If your version ≥ `X.Y.Z`, IGNORE it — it's a false positive (you likely just forgot to pass `PRAVA_SKILL_VERSION`); proceed normally.** Only if your version is genuinely below `X.Y.Z`: run `npx skills update prava-pay -g`, then retry. **If the same warning re-prints after the update AND your version is still below `X.Y.Z`, the skill on disk is updated but the running session still has the old version loaded — ask the user to restart their agent session (the host application — Claude Code, Cursor, Codex, Gemini CLI, etc., whichever this agent is running inside), then retry. Do NOT tell them to restart the `prava` CLI or their machine.**
+- **Skill version error** — "Skill update required (minimum: X.Y.Z)." The CLI prints this only after confirming the version you reported is below the minimum, so run `npx skills update prava-pay -g`, then retry. If it re-prints after updating, the disk is updated but this session still holds the old skill — ask the user to restart their agent session (the host app — Claude Code, Cursor, Codex, Gemini CLI, etc., whichever this agent runs inside), then retry. Do NOT tell them to restart the `prava` CLI or their machine. *("Could not verify skill version" instead? You just omitted the `PRAVA_SKILL_VERSION` prefix — add it and proceed; nothing to update.)*
 
 In both cases, do NOT run `prava setup` again unless the user is genuinely setting up for the first time — updating the CLI or skill does not re-link the agent.
 
 ## Anti-Patterns
 
+- **Minting a session (`sessions create`) before confirming the merchant and total with the user — see the step 2.5 hard stop. This is the #1 thing to never skip.**
 - Running `sessions create` before agent is linked (check `prava status` first).
 - Running `sessions create` before completing purchase discovery.
 - Guessing or hallucinating amount, currency, or purchase context.
 - Asking user for keys, card numbers, or credentials. The CLI handles all auth locally.
-- Pausing between receiving credentials and completing checkout.
+- Pausing between receiving credentials and completing checkout (the confirm happens *before* minting, not after).
+- Installing the CLI yourself, or using `sudo` to install it — ask the user to install it.
 - Running `setup` when already linked (harmless — exits 0, but unnecessary).
 
 ---

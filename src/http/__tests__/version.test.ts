@@ -42,15 +42,15 @@ describe('skillVersionVerdict', () => {
     expect(skillVersionVerdict('3.0.0', '2.9.9')).toBe('ok');
   });
 
-  it("returns 'warn' when the agent's skill version is below the minimum", () => {
-    expect(skillVersionVerdict('2.1.0', '2.2.0')).toBe('warn');
-    expect(skillVersionVerdict('1.0.0', '2.0.0')).toBe('warn');
+  it("returns 'behind' when the agent's skill version is below the minimum", () => {
+    expect(skillVersionVerdict('2.1.0', '2.2.0')).toBe('behind');
+    expect(skillVersionVerdict('1.0.0', '2.0.0')).toBe('behind');
   });
 
-  it("returns 'warn' when no skill version was supplied (env var unset)", () => {
-    // Falls back to warning so genuinely-outdated agents that don't pass the
-    // version still get a signal; the SKILL.md compare is the backstop.
-    expect(skillVersionVerdict(undefined, '2.2.0')).toBe('warn');
-    expect(skillVersionVerdict('', '2.2.0')).toBe('warn');
+  it("returns 'unknown' when no skill version was supplied (env var unset)", () => {
+    // We can't tell if the skill is current, so we must NOT claim "update
+    // required" — the usual cause is a forgotten PRAVA_SKILL_VERSION prefix.
+    expect(skillVersionVerdict(undefined, '2.2.0')).toBe('unknown');
+    expect(skillVersionVerdict('', '2.2.0')).toBe('unknown');
   });
 });

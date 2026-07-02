@@ -12,7 +12,7 @@ If `prava` is not found, treat it as a PATH discovery issue before treating it a
 find ~/.nvm/versions/node ~/.npm-global /opt/homebrew /usr/local -path '*/bin/prava' -type f 2>/dev/null
 ```
 
-Use an absolute binary path or prepend its `bin` directory to `PATH` before deciding to install `@prava-sdk/cli`.
+Use an absolute binary path or prepend its `bin` directory to `PATH` before concluding it's missing. If it genuinely isn't installed, ask the user to install `@prava-sdk/cli` — never install it yourself, and never use `sudo`.
 
 ## Output varies by state
 

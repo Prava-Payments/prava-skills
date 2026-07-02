@@ -4,15 +4,15 @@
     {
       "id": 1,
       "prompt": "I want to buy a latte and a croissant from Blue Bottle Coffee. The latte is $5.00 and the croissant is $3.50. Their website is https://bluebottlecoffee.com and they're based in the US. This is my first time using Prava.",
-      "expected_output": "A plan that includes: check if prava CLI is installed; install if missing; run prava status; since first-time, run prava setup with agent name; show approval URL; after approval, immediately run prava sessions create with total 8.50, USD, both products, and merchant details; immediately use returned credentials to complete checkout via browser automation.",
+      "expected_output": "A plan that includes: check if prava CLI is installed; ask the user to install it if missing (does not auto-install or use sudo); run prava status; since first-time, run prava setup with agent name; show approval URL; after approval, confirm the merchant and total with the user, then run prava sessions create with total 8.50, USD, both products, and merchant details; immediately use returned credentials to complete checkout via browser automation.",
       "files": [],
       "expectations": [
         "Plan checks if prava CLI is installed (which prava or prava --version)",
-        "Plan installs CLI if not found (npm install -g @prava-sdk/cli)",
+        "Plan asks the user to install the CLI if not found — does NOT auto-install it and does NOT use sudo",
         "Plan runs 'prava status' to check agent link state before any payment command",
         "Plan runs 'prava setup --name <name>' since this is a first-time user",
         "Plan shows the approval URL to the user and waits for approval",
-        "Plan proceeds to payment immediately after setup completes (does not stop to ask user)",
+        "Plan confirms the merchant and total amount with the user before running 'prava sessions create' (the step 2.5 hard stop)",
         "Plan uses 'prava sessions create' with --total-amount '8.50' --currency USD",
         "Plan includes --merchant-name 'Blue Bottle Coffee' and --merchant-url 'https://bluebottlecoffee.com' and --merchant-country US (2-char code, not 'USA')",
         "Plan includes two separate --product flags with correct descriptions and unit_price as strings",
@@ -38,11 +38,11 @@
     {
       "id": 3,
       "prompt": "Set up Prava on my machine so I can make purchases later.",
-      "expected_output": "A plan that includes: check CLI installed; install if needed; run prava status; run prava setup with agent name if not configured; show URL and wait; confirm complete. Should NOT create a payment session.",
+      "expected_output": "A plan that includes: check CLI installed; ask the user to install it if needed (no auto-install or sudo); run prava status; run prava setup with agent name if not configured; show URL and wait; confirm complete. Should NOT create a payment session.",
       "files": [],
       "expectations": [
         "Plan checks if prava CLI is installed (which prava or prava --version)",
-        "Plan installs CLI if not found (npm install -g @prava-sdk/cli)",
+        "Plan asks the user to install the CLI if not found — does NOT auto-install it and does NOT use sudo",
         "Plan runs 'prava status' to check if already linked",
         "Plan runs 'prava setup --name <name>' if not configured",
         "Plan shows approval URL AND immediately runs 'prava setup poll' to wait for browser approval (does NOT wait for a user chat reply before polling)",

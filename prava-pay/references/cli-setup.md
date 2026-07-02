@@ -4,9 +4,13 @@ Link this agent to a Prava account. One-time operation.
 
 ## Installation
 
+The CLI is installed by the **user**, not the agent — a global npm install should happen under their control. If it's missing, ask them to run:
+
 ```bash
 npm install -g @prava-sdk/cli
 ```
+
+Never run this with `sudo` or elevate privileges on the user's behalf. If it fails on permissions, surface the error and let the user resolve their Node setup.
 
 ## Command
 

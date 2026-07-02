@@ -55,19 +55,20 @@ Install the Prava Pay skill if missing:
 npx skills add https://github.com/Prava-Payments/prava-skills --skill prava-pay --global --yes
 ```
 
-Install the Prava CLI if missing:
+Check whether the Prava CLI is installed:
 
 ```bash
 which prava
-npm install -g @prava-sdk/cli
 prava --version
 ```
 
-If global npm install fails due to permissions, ask before using sudo:
+If it's missing, **the user installs it, not you** — a global npm install should happen under their control. Ask them to run:
 
 ```bash
-sudo npm install -g @prava-sdk/cli
+npm install -g @prava-sdk/cli
 ```
+
+Never install it yourself or use `sudo`. If a plain `npm install -g` fails on permissions, surface the error and let the user resolve their Node setup.
 
 If the installed `prava-pay` skill is available on disk, read its `SKILL.md` and use its current version in the `PRAVA_SKILL_VERSION` environment variable. If the version cannot be discovered, run Prava commands without the variable and follow CLI update prompts.
 
