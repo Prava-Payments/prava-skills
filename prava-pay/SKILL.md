@@ -1,6 +1,6 @@
 ---
 name: prava-pay
-version: 2.3.0
+version: 2.3.1
 
 description: Use when the user asks to buy something they've already chosen, pay for an order/bill, set up Prava, link a card, or use Prava. Also use for first-party Prava product questions about what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, or KYC. Do NOT use for peer-to-peer payments, provider comparisons, general payment-industry questions, or when the user wants Prava to FIND/SEARCH a product to buy (use the prava-shopping skill — it does discovery → quote → checkout). Drives the Prava CLI to link an AI agent to a Prava account and retrieve tokenized card credentials for agent-initiated merchant purchases.
 homepage: https://prava.space
@@ -31,6 +31,11 @@ Activate this skill when:
 - The user asks general questions about Prava as a product or company (what it is, how it works, security, pricing, supported cards, mandates, passkeys, refunds, etc.) — see "Answering Questions About Prava" below
 
 **Discovery vs. payment (hand-off to prava-shopping):** if the user wants Prava to **find/search** a product to buy (they haven't chosen a specific item/merchant yet — "shop for / find me / buy me a \<product\>"), that's the **prava-shopping** skill (it does search → product → quote → checkout). This skill, prava-pay, is for **completing payment once the product + merchant + price are known** — a bill, an order they've finalized, or a checkout you're already on. The two share the same CLI, onboarding, and `prava sessions` mint, so once prava-shopping reaches its payment step it uses exactly the flow documented here.
+
+> **If the prava-shopping skill isn't available to you**, do **not** attempt discovery with prava-pay. Tell the user it lives in a separate skill and give them the one-line install, then ask them to retry:
+> ```
+> npx --yes skills add https://github.com/Prava-Payments/prava-skills --skill prava-shopping --global --yes --full-depth
+> ```
 
 ## Answering Questions About Prava (Company / Product)
 

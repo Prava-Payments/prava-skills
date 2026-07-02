@@ -115,7 +115,7 @@ function warnOnce(key: string, message: string): void {
  * point is to reflect what the user actually has). Checks the standard skill install dirs; returns
  * undefined if not found, so the caller falls back to PRAVA_SKILL_VERSION or skips (never false-warns).
  */
-function getInstalledSkillVersion(skillName: string): string | undefined {
+export function getInstalledSkillVersion(skillName: string): string | undefined {
   const candidates = [
     join(homedir(), '.claude', 'skills', skillName, 'SKILL.md'),
     join(homedir(), '.agents', 'skills', skillName, 'SKILL.md'),

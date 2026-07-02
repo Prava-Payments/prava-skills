@@ -13,10 +13,27 @@
 
 import { createInterface } from 'node:readline/promises';
 import { AgentStore } from '../storage/agent-store.js';
-import { PravaClient } from '../http/client.js';
+import { PravaClient, getInstalledSkillVersion } from '../http/client.js';
 import { config } from '../config.js';
 
 type Identity = { agentId: string; privateKey: string };
+
+/**
+ * The `prava shop` commands live in the CLI, so they run whether or not the prava-shopping
+ * *skill* is installed. If it's missing, the agent lacks the guided flow (pacing, masking,
+ * confirmations) — nudge once (stderr, so --json stdout stays clean) to install it.
+ */
+let nudgedMissingSkill = false;
+function nudgeIfShoppingSkillMissing(): void {
+  if (nudgedMissingSkill) return;
+  nudgedMissingSkill = true;
+  if (getInstalledSkillVersion('prava-shopping')) return;
+  console.error(
+    'ℹ️  For the full guided shopping flow (search → compare → quote → checkout with confirmations),\n' +
+      '   install the prava-shopping skill:\n' +
+      '   npx --yes skills add https://github.com/Prava-Payments/prava-skills --skill prava-shopping --global --yes --full-depth',
+  );
+}
 
 /** The wallet wraps every shop response as { success, data } | { success:false, error }. */
 interface ShopEnvelope<T> {
@@ -27,6 +44,7 @@ interface ShopEnvelope<T> {
 }
 
 function shopClient(): PravaClient {
+  nudgeIfShoppingSkillMissing();
   return new PravaClient(config.walletApiUrl, 'prava-shopping');
 }
 
