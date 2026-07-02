@@ -8,6 +8,7 @@
 
 import { signRequest } from '../crypto/keys.js';
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
@@ -109,13 +110,39 @@ function warnOnce(key: string, message: string): void {
   console.warn(message);
 }
 
+/**
+ * Read the USER'S INSTALLED skill version from its SKILL.md (NOT the CLI's bundle — the whole
+ * point is to reflect what the user actually has). Checks the standard skill install dirs; returns
+ * undefined if not found, so the caller falls back to PRAVA_SKILL_VERSION or skips (never false-warns).
+ */
+function getInstalledSkillVersion(skillName: string): string | undefined {
+  const candidates = [
+    join(homedir(), '.claude', 'skills', skillName, 'SKILL.md'),
+    join(homedir(), '.agents', 'skills', skillName, 'SKILL.md'),
+    join(process.cwd(), '.claude', 'skills', skillName, 'SKILL.md'),
+  ];
+  for (const p of candidates) {
+    try {
+      const m = readFileSync(p, 'utf-8').match(/^version:\s*(.+)$/m);
+      if (m) return m[1].trim();
+    } catch {
+      // not here — try the next location
+    }
+  }
+  return undefined;
+}
+
 export class PravaClient {
   private serverUrl: string;
   private cliVersion: string;
+  private skillName: string;
 
-  constructor(serverUrl?: string) {
+  // skillName is inferred from the command group (shop → prava-shopping; setup/sessions/status →
+  // prava-pay), so the server returns that skill's minimum version — no env prefix needed.
+  constructor(serverUrl?: string, skillName: string = 'prava-pay') {
     this.serverUrl = serverUrl ?? config.apiServerUrl;
     this.cliVersion = getCliVersion();
+    this.skillName = skillName;
   }
 
   async request<T>(opts: RequestOptions): Promise<ApiResponse<T>> {
@@ -126,10 +153,9 @@ export class PravaClient {
       'Content-Type': 'application/json',
     };
 
-    // Tell the server which skill is driving so it can return that skill's minimum version
-    // (skills version independently). Sourced from PRAVA_SKILL_NAME, set by the skill.
-    const skillName = process.env['PRAVA_SKILL_NAME'];
-    if (skillName) headers['X-Skill-Name'] = skillName;
+    // The skill is inferred from the command group (see constructor), so the server returns that
+    // skill's minimum version — no PRAVA_SKILL_NAME env needed.
+    headers['X-Skill-Name'] = this.skillName;
 
     // Add signature headers if agent credentials provided
     if (opts.agentId && opts.privateKey) {
@@ -198,13 +224,15 @@ export class PravaClient {
   }
 
   private checkSkillVersion(minSkillVersion: string): void {
-    // The agent passes its loaded skill version via PRAVA_SKILL_VERSION (from
-    // its SKILL.md frontmatter). Stay silent when current; otherwise print a
-    // message that says exactly what we know, so the skill needn't second-guess it.
-    const verdict = skillVersionVerdict(process.env['PRAVA_SKILL_VERSION'], minSkillVersion);
+    // Resolve the user's ACTUAL skill version: read the installed SKILL.md first (zero-friction on
+    // hosts we know, e.g. Claude Code's ~/.claude/skills), fall back to PRAVA_SKILL_VERSION (host-
+    // agnostic, set by the loaded skill). Neither → 'unknown' (soft note, never false-"required").
+    const skillName = this.skillName;
+    const loadedVersion =
+      getInstalledSkillVersion(skillName) ?? process.env['PRAVA_SKILL_VERSION'];
+    const verdict = skillVersionVerdict(loadedVersion, minSkillVersion);
     if (verdict === 'ok') return;
 
-    const skillName = process.env['PRAVA_SKILL_NAME'] || 'prava-pay';
     if (verdict === 'behind') {
       // We verified the reported version is actually below the minimum.
       warnOnce(
@@ -214,12 +242,12 @@ export class PravaClient {
       );
       return;
     }
-    // 'unknown' — no PRAVA_SKILL_VERSION reported, so we can't confirm the skill
-    // is current. Don't cry "required"; the usual cause is a forgotten prefix.
+    // 'unknown' — couldn't read the installed skill version (non-standard host skill dir) and no
+    // PRAVA_SKILL_VERSION override. Don't cry "required"; just flag it softly.
     warnOnce(
       'skill-version',
-      `\nCould not verify skill version — PRAVA_SKILL_VERSION not set (server minimum: ${minSkillVersion}).` +
-      `\nAdd the PRAVA_SKILL_VERSION=<ver> prefix. If ${skillName} is genuinely older, run: npx skills update ${skillName} -g\n`,
+      `\nCould not verify ${skillName} version (server minimum: ${minSkillVersion}).` +
+      `\nIf it's outdated, run: npx skills update ${skillName} -g\n`,
     );
   }
 }

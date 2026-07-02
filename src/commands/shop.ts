@@ -27,7 +27,7 @@ interface ShopEnvelope<T> {
 }
 
 function shopClient(): PravaClient {
-  return new PravaClient(config.walletApiUrl);
+  return new PravaClient(config.walletApiUrl, 'prava-shopping');
 }
 
 /** Load the onboarded agent; if the local link flag is stale, confirm with the server. */
@@ -40,7 +40,7 @@ async function requireAgent(): Promise<Identity> {
   }
   if (!data.linked || !data.agentId) {
     try {
-      const r = await new PravaClient().request<{ status: string; agent_id?: string }>({
+      const r = await new PravaClient(undefined, 'prava-shopping').request<{ status: string; agent_id?: string }>({
         method: 'GET',
         path: `/v1/agents/link/status?lid=${data.linkId}`,
       });

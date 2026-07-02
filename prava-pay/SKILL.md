@@ -81,15 +81,9 @@ prava --version
 The CLI automatically checks for updates on every API call. Watch for two notices in command output:
 
 - **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
-- **Skill update notice** — "Skill update required (minimum: X.Y.Z)". The CLI prints this **only after confirming the version you reported is actually below the minimum**, so trust it literally: run `npx skills update prava-pay -g`, then continue. (If instead you see "Could not verify skill version", you just forgot the `PRAVA_SKILL_VERSION=<ver>` prefix — add it and re-run; there's nothing to update.)
+- **Skill update notice** — "Skill update required (minimum: X.Y.Z)". The CLI prints this **only after confirming your installed version is actually below the minimum**, so trust it literally: run `npx skills update prava-pay -g`, then continue. (If instead you see "Could not verify … version", the CLI just couldn't locate your installed skill on this host — harmless; update only if it's genuinely old.)
 
-**Always run `prava` with `PRAVA_SKILL_NAME=prava-pay` and `PRAVA_SKILL_VERSION=<this skill's version>`** (from the frontmatter) so the CLI reports which skill + version to the server and can verify per-skill compatibility (prava-pay and prava-shopping version independently). Prefix every `prava` invocation, e.g.:
-
-```bash
-PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<this skill's version> prava status
-```
-
-If you forget the prefix, the CLI can't confirm your version and prints "Could not verify skill version" (not "update required") — just add the prefix and re-run.
+**No env prefix needed.** The CLI infers the skill from the command (`setup`/`sessions`/`status` → prava-pay) and reads your installed skill version itself, so just run `prava …` directly. (Only on a non-standard agent host would you set `PRAVA_SKILL_VERSION=<ver>` as an override.)
 
 Do not run separate version-check commands — the CLI handles this automatically.
 
@@ -264,15 +258,14 @@ There is exactly one place to stop for the user: the **step 2.5 confirmation gat
 
 ## CLI Quick Reference
 
-Prefix every command with `PRAVA_SKILL_VERSION=<this skill's version>` (from the frontmatter) so the CLI can verify skill compatibility and stay quiet when you're current:
+No env prefix needed — the CLI detects the skill + version automatically:
 
 ```bash
-# Prefix every call with:  PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<ver>
-PRAVA_SKILL_VERSION=<ver> prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
-PRAVA_SKILL_VERSION=<ver> prava setup poll                                        # waits for user to approve the link
-PRAVA_SKILL_VERSION=<ver> prava status                                            # checks link status (also detects approval)
-PRAVA_SKILL_VERSION=<ver> prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]   # creates session, prints URL, exits immediately
-PRAVA_SKILL_VERSION=<ver> prava sessions poll --session-id <id>                   # waits for card tokenization
+prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
+prava setup poll                                        # waits for user to approve the link
+prava status                                            # checks link status (also detects approval)
+prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<name>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]   # creates session, prints URL, exits immediately
+prava sessions poll --session-id <id>                   # waits for card tokenization
 ```
 
 ## Output Contract
