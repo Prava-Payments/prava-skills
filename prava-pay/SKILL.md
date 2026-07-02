@@ -89,10 +89,10 @@ The CLI automatically checks for updates on every API call. Watch for two notice
 - **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
 - **Skill update notice** — "Skill update required (minimum: X.Y.Z)". **Compare `X.Y.Z` to this skill's own `version:` (frontmatter). If your version is ≥ `X.Y.Z`, IGNORE it — you're current.** Only if your version is actually below `X.Y.Z` should you run `npx skills update prava-pay -g` before continuing.
 
-**Always run `prava` with the `PRAVA_SKILL_VERSION` env var set to this skill's version** (from the frontmatter) so the CLI can verify skill compatibility and stay silent when you're current. Prefix every `prava` invocation, e.g.:
+**Always run `prava` with `PRAVA_SKILL_NAME=prava-pay` and `PRAVA_SKILL_VERSION=<this skill's version>`** (from the frontmatter) so the CLI reports which skill + version to the server and can verify per-skill compatibility (prava-pay and prava-shopping version independently). Prefix every `prava` invocation, e.g.:
 
 ```bash
-PRAVA_SKILL_VERSION=<this skill's version> prava status
+PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<this skill's version> prava status
 ```
 
 If you forget the prefix, the CLI may print the skill-update notice even when you're current — that's why the compare rule above is the backstop.
@@ -263,6 +263,7 @@ The user's original intent (e.g., "buy coffee") must not be interrupted.
 Prefix every command with `PRAVA_SKILL_VERSION=<this skill's version>` (from the frontmatter) so the CLI can verify skill compatibility and stay quiet when you're current:
 
 ```bash
+# Prefix every call with:  PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<ver>
 PRAVA_SKILL_VERSION=<ver> prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
 PRAVA_SKILL_VERSION=<ver> prava setup poll                                        # waits for user to approve the link
 PRAVA_SKILL_VERSION=<ver> prava status                                            # checks link status (also detects approval)

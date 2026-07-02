@@ -59,8 +59,9 @@ The agent must be **linked** to the user's Prava account, and the `prava` CLI mu
 If `prava status` is not `active`, do the linking flow first — see the **prava-pay** skill
 (Prerequisites + "Verify CLI is installed AND agent is linked"). Don't duplicate it here.
 
-Prefix every command with `PRAVA_SKILL_VERSION=<this skill's version>` (the `version:` in the
-frontmatter) so the CLI can verify compatibility and stay quiet when you're current.
+Prefix every command with `PRAVA_SKILL_NAME=prava-shopping PRAVA_SKILL_VERSION=<this skill's version>`
+(the `version:` in the frontmatter) so the CLI reports which skill + version to the server and can
+verify per-skill compatibility (prava-shopping versions independently from prava-pay).
 
 ## The Flow (id chain: product_id → variant_id → checkout_session_id)
 
@@ -260,6 +261,7 @@ verbatim; never invent or decode it. (Use `--json` if you need to capture the ra
 See [cli-shop reference](references/cli-shop.md) for full flags, output, and exit codes.
 
 ```bash
+# Prefix every call with:  PRAVA_SKILL_NAME=prava-shopping PRAVA_SKILL_VERSION=<ver>
 PRAVA_SKILL_VERSION=<ver> prava shop search   --query "<keywords>" [--intent "<user's full ask>"] [--merchant <d>] [--ships-to US] [--limit N] [--cursor <c>] [--json]
 PRAVA_SKILL_VERSION=<ver> prava shop product  --product-id "<id>" --merchant <d> [--json]
 PRAVA_SKILL_VERSION=<ver> prava shop quote    --variant-id "<id>" --merchant <d> [--quantity N] --yes [--json]
