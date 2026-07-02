@@ -2,7 +2,7 @@
  * prava shop — product discovery + checkout through the wallet.
  *
  * Flow:  search → product → quote → checkout.  Every request is agent-signed and
- * sent to the wallet (config.dashboardUrl), which proxies to the merchant shop API.
+ * sent to the wallet BACKEND API (config.walletApiUrl), which proxies to the merchant shop API.
  *
  * Output is curated by default — only the fields needed to decide and to chain the
  * next call (product_id → variant_id → checkout_session_id). Pass --json for the
@@ -27,7 +27,7 @@ interface ShopEnvelope<T> {
 }
 
 function shopClient(): PravaClient {
-  return new PravaClient(config.dashboardUrl);
+  return new PravaClient(config.walletApiUrl);
 }
 
 /** Load the onboarded agent; if the local link flag is stale, confirm with the server. */

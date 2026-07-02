@@ -1,9 +1,9 @@
 # `prava shop` — command reference
 
 Product discovery + checkout through the wallet. Every command is agent-signed (uses the linked
-agent from `~/.prava/agent.json`) and sent to the wallet at `PRAVA_DASHBOARD_URL`
-(default `https://pay.prava.space`; for local testing set `PRAVA_WALLET_URL` / `PRAVA_DASHBOARD_URL`
-to e.g. `http://localhost:3004`).
+agent from `~/.prava/agent.json`) and sent to the wallet **backend API** at `PRAVA_WALLET_API_URL`
+(default `https://pay-api.prava.space` — the API host, NOT the `pay.prava.space` UI). For local
+testing set `PRAVA_WALLET_API_URL` (or `PRAVA_DASHBOARD_URL`) to e.g. `http://localhost:3004`.
 
 Output is **curated** by default — only the fields needed to decide and to chain the next call.
 Add `--json` to any command to get the raw passthrough (for capturing an id or cursor).

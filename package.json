@@ -1,6 +1,6 @@
 {
   "name": "@prava-sdk/cli",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Prava CLI — smart wallet for AI agents",
   "type": "module",
   "license": "MIT",
