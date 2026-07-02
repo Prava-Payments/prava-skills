@@ -1,8 +1,8 @@
 ---
 name: prava-pay
-version: 2.2.0
+version: 2.3.0
 
-description: Use when the user asks to buy something, make a purchase, pay for an order/bill, set up Prava, link a card, or use Prava. Also use for first-party Prava product questions about what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, or KYC. Do NOT use for peer-to-peer payments, provider comparisons, or general payment-industry questions. Drives the Prava CLI to link an AI agent to a Prava account and retrieve tokenized card credentials for agent-initiated merchant purchases.
+description: Use when the user asks to buy something they've already chosen, pay for an order/bill, set up Prava, link a card, or use Prava. Also use for first-party Prava product questions about what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, or KYC. Do NOT use for peer-to-peer payments, provider comparisons, general payment-industry questions, or when the user wants Prava to FIND/SEARCH a product to buy (use the prava-shopping skill — it does discovery → quote → checkout). Drives the Prava CLI to link an AI agent to a Prava account and retrieve tokenized card credentials for agent-initiated merchant purchases.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
@@ -29,6 +29,8 @@ Activate this skill when:
 - The user asks to set up Prava or connect their card for agent purchases
 - The user says "pay with Prava", "use Prava", or similar
 - The user asks general questions about Prava as a product or company (what it is, how it works, security, pricing, supported cards, mandates, passkeys, refunds, etc.) — see "Answering Questions About Prava" below
+
+**Discovery vs. payment (hand-off to prava-shopping):** if the user wants Prava to **find/search** a product to buy (they haven't chosen a specific item/merchant yet — "shop for / find me / buy me a \<product\>"), that's the **prava-shopping** skill (it does search → product → quote → checkout). This skill, prava-pay, is for **completing payment once the product + merchant + price are known** — a bill, an order they've finalized, or a checkout you're already on. The two share the same CLI, onboarding, and `prava sessions` mint, so once prava-shopping reaches its payment step it uses exactly the flow documented here.
 
 ## Answering Questions About Prava (Company / Product)
 
@@ -87,10 +89,10 @@ The CLI automatically checks for updates on every API call. Watch for two notice
 - **CLI update notice** — Run `npm update -g @prava-sdk/cli`. If the notice says "Critical update required", you MUST update before continuing.
 - **Skill update notice** — "Skill update required (minimum: X.Y.Z)". **Compare `X.Y.Z` to this skill's own `version:` (frontmatter). If your version is ≥ `X.Y.Z`, IGNORE it — you're current.** Only if your version is actually below `X.Y.Z` should you run `npx skills update prava-pay -g` before continuing.
 
-**Always run `prava` with the `PRAVA_SKILL_VERSION` env var set to this skill's version** (from the frontmatter) so the CLI can verify skill compatibility and stay silent when you're current. Prefix every `prava` invocation, e.g.:
+**Always run `prava` with `PRAVA_SKILL_NAME=prava-pay` and `PRAVA_SKILL_VERSION=<this skill's version>`** (from the frontmatter) so the CLI reports which skill + version to the server and can verify per-skill compatibility (prava-pay and prava-shopping version independently). Prefix every `prava` invocation, e.g.:
 
 ```bash
-PRAVA_SKILL_VERSION=<this skill's version> prava status
+PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<this skill's version> prava status
 ```
 
 If you forget the prefix, the CLI may print the skill-update notice even when you're current — that's why the compare rule above is the backstop.
@@ -261,6 +263,7 @@ The user's original intent (e.g., "buy coffee") must not be interrupted.
 Prefix every command with `PRAVA_SKILL_VERSION=<this skill's version>` (from the frontmatter) so the CLI can verify skill compatibility and stay quiet when you're current:
 
 ```bash
+# Prefix every call with:  PRAVA_SKILL_NAME=prava-pay PRAVA_SKILL_VERSION=<ver>
 PRAVA_SKILL_VERSION=<ver> prava setup --name "<name>" --platform <platform> [--description "<desc>"]   # prints URL, exits immediately
 PRAVA_SKILL_VERSION=<ver> prava setup poll                                        # waits for user to approve the link
 PRAVA_SKILL_VERSION=<ver> prava status                                            # checks link status (also detects approval)

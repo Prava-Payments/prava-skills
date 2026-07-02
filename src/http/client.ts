@@ -18,6 +18,8 @@ interface RequestOptions {
   body?: Record<string, unknown>;
   agentId?: string;
   privateKey?: string;
+  /** Per-request timeout override (ms). Defaults to config.requestTimeoutMs. */
+  timeoutMs?: number;
 }
 
 interface ApiResponse<T = unknown> {
@@ -121,6 +123,11 @@ export class PravaClient {
       'Content-Type': 'application/json',
     };
 
+    // Tell the server which skill is driving so it can return that skill's minimum version
+    // (skills version independently). Sourced from PRAVA_SKILL_NAME, set by the skill.
+    const skillName = process.env['PRAVA_SKILL_NAME'];
+    if (skillName) headers['X-Skill-Name'] = skillName;
+
     // Add signature headers if agent credentials provided
     if (opts.agentId && opts.privateKey) {
       const timestamp = Math.floor(Date.now() / 1000).toString();
@@ -132,7 +139,7 @@ export class PravaClient {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), config.requestTimeoutMs);
+    const timeout = setTimeout(() => controller.abort(), opts.timeoutMs ?? config.requestTimeoutMs);
 
     try {
       const response = await fetch(url, {
@@ -194,10 +201,11 @@ export class PravaClient {
     if (skillVersionVerdict(process.env['PRAVA_SKILL_VERSION'], minSkillVersion) === 'ok') {
       return;
     }
+    const skillName = process.env['PRAVA_SKILL_NAME'] || 'prava-pay';
     warnOnce(
       'skill-version',
       `\nSkill update required (minimum: ${minSkillVersion}).` +
-      `\nRun: npx skills update prava-pay -g\n`,
+      `\nRun: npx skills update ${skillName} -g\n`,
     );
   }
 }

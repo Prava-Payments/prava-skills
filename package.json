@@ -1,6 +1,6 @@
 {
   "name": "@prava-sdk/cli",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Prava CLI — smart wallet for AI agents",
   "type": "module",
   "license": "MIT",
@@ -16,6 +16,7 @@
   "files": [
     "dist",
     "prava-pay",
+    "prava-shopping",
     "prava-sdk-integration",
     "prava-merchants-checkout",
     "!**/docs",
@@ -33,7 +34,8 @@
     "eval:pay:about": "tsx prava-pay/evals/about-run.ts",
     "eval:sdk": "tsx prava-sdk-integration/evals/run.ts",
     "eval:routing": "tsx evals/routing.ts",
-    "doctor:zepto": "node prava-merchants-checkout/zepto-prava-skill/scripts/zepto-prava-doctor.mjs"
+    "doctor:zepto": "node prava-merchants-checkout/zepto-prava-skill/scripts/zepto-prava-doctor.mjs",
+    "test:shop-e2e": "node testing-flow/shop-e2e/run.mjs"
   },
   "dependencies": {
     "commander": "^12.0.0"
