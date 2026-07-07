@@ -86,6 +86,17 @@ function discoverSkills(repoRoot: string): SkillInfo[] {
     const fm = extractFrontmatter(skillMdPath);
     if (fm) skills.push(fm);
   }
+  // Competitor distractors (evals/fixtures/*.SKILL.md): candidate skills the
+  // router can pick, so cases can assert we win head-to-head — or correctly
+  // lose intents we don't serve (crypto, x402, balance).
+  const fixturesDir = join(__dirname, "fixtures");
+  if (existsSync(fixturesDir)) {
+    for (const entry of readdirSync(fixturesDir)) {
+      if (!entry.endsWith(".SKILL.md")) continue;
+      const fm = extractFrontmatter(join(fixturesDir, entry));
+      if (fm) skills.push(fm);
+    }
+  }
   return skills.sort((a, b) => a.name.localeCompare(b.name));
 }
 

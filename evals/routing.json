@@ -179,6 +179,78 @@
       "prompt": "Just research some good coffee brands for me — I'm not buying anything.",
       "expected": "none",
       "category": "shop-negative"
+    },
+    {
+      "id": 31,
+      "prompt": "Buy this for me: https://bonescoffee.com/products/holy-cannoli-coffee",
+      "expected": "prava-pay",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 32,
+      "prompt": "Complete the checkout for me, my cart is ready on the merchant site.",
+      "expected": "prava-pay",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 33,
+      "prompt": "Pay for this order — it's $42.10 at bestbuy.com.",
+      "expected": "prava-pay",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 34,
+      "prompt": "Set up payments so my agent can buy things for me.",
+      "expected": "prava-pay",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 35,
+      "prompt": "Link my card so you can make purchases on my behalf.",
+      "expected": "prava-pay",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 36,
+      "prompt": "Find me something to buy for my dad's birthday, around $30.",
+      "expected": "prava-shopping",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 37,
+      "prompt": "Find me a mechanical keyboard to buy under $100.",
+      "expected": "prava-shopping",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 38,
+      "prompt": "Buy me a bag of dark roast coffee online.",
+      "expected": "prava-shopping",
+      "category": "competitor-head-to-head"
+    },
+    {
+      "id": 39,
+      "prompt": "Send 5 USDC to 8f4z...Kq2 on Solana.",
+      "expected": "lobstercash",
+      "category": "competitor-must-lose"
+    },
+    {
+      "id": 40,
+      "prompt": "Call this paid API for me, it uses the x402 protocol.",
+      "expected": "lobstercash",
+      "category": "competitor-must-lose"
+    },
+    {
+      "id": 41,
+      "prompt": "How much crypto do I have in my agent wallet?",
+      "expected": "lobstercash",
+      "category": "competitor-must-lose"
+    },
+    {
+      "id": 42,
+      "prompt": "Top up my agent's wallet with some USDC.",
+      "expected": "lobstercash",
+      "category": "competitor-must-lose"
     }
   ]
 }

@@ -19,7 +19,7 @@ prava setup --name "<name>" --platform <platform> [--description "<desc>"]
 ```
 
 - `--name` (required) — Descriptive name. "Claude Code", "Cursor", "Alice's Shopping Bot". Not generic like "My Agent".
-- `--platform` (required) — The agent platform. Must be one of: `claude-code`, `codex`, `cursor`, `gemini-cli`, `hermes`, `custom`. The agent determines this automatically from its own identity — never ask the user.
+- `--platform` (required) — The agent platform. See [platforms reference](platforms.md) for the full table. The agent determines this automatically from its own identity — never ask the user.
 - `--description` (optional) — Shown on the approval screen.
 
 ## Flow
@@ -100,3 +100,13 @@ Otherwise: "Agent linked! Ready to collect payments."
 - Running setup when already linked (check `prava status` first).
 - Asking user for credentials. The CLI handles all auth locally.
 - Waiting for user to say "done" — run `prava setup poll` or check `prava status`.
+
+## Troubleshooting: status stuck on "pending" (legacy CLI versions only)
+
+The "stuck pending" failure mode was eliminated in CLI 1.1+ / skill 2.1+: `prava status` now returns either `Link expired` (past the 15-minute TTL) or a `Link: <URL>` line you can re-show the user. These notes cover older CLIs only:
+
+- If the CLI does NOT print `Link expired` but the user can't find the URL, ask the user to upgrade: `npm update -g @prava-sdk/cli`. After upgrading, `prava status` re-prints the URL or returns `Link expired`.
+- **Do NOT run `prava setup` again from a troubleshooting path without confirming with the user.** Re-running rotates the keypair and invalidates any link the user might still be about to approve. Exceptions: (1) the CLI explicitly prints `Link expired`, OR (2) the user confirms in this session they want a fresh link.
+- If a purchase is pending on an older CLI that doesn't recognize `Link expired`, run `prava sessions create` directly — it has built-in auto-link-check.
+- Confirm the user opened the exact URL printed by the most recent `prava setup` (not an older one).
+- Check network connectivity — `prava status` falls back to local state when the server is unreachable, which can mask a real approval.
