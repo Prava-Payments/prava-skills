@@ -18,7 +18,6 @@
     "prava-pay",
     "prava-shopping",
     "prava-sdk-integration",
-    "prava-merchants-checkout",
     "!**/docs",
     "!**/superpowers",
     "!**/results"
@@ -34,7 +33,6 @@
     "eval:pay:about": "tsx prava-pay/evals/about-run.ts",
     "eval:sdk": "tsx prava-sdk-integration/evals/run.ts",
     "eval:routing": "tsx evals/routing.ts",
-    "doctor:zepto": "node prava-merchants-checkout/zepto-prava-skill/scripts/zepto-prava-doctor.mjs",
     "test:shop-e2e": "node testing-flow/shop-e2e/run.mjs"
   },
   "dependencies": {
