@@ -70,6 +70,25 @@ describe('mandateChargeCommand', () => {
     expect(out).toContain('txn_1');
   });
 
+  it('falls back to plaintext credentials (dynamicCvv → cryptogram) when there is no encrypted_payload', async () => {
+    captured.response = {
+      status: 200,
+      data: {
+        status: 'awaiting_result', transactionId: 'txn_2',
+        credentials: {
+          token: 'PLAIN_TKN', dynamicCvv: 'PLAIN_CVV', expiryMonth: '09', expiryYear: '2028',
+        },
+      },
+      headers: {},
+    };
+    const { mandateChargeCommand } = await import('../mandate');
+    await mandateChargeCommand({ mandateId: 'mdt_1', amount: '40.00', yes: true });
+    const out = logs.join('\n');
+    expect(out).toContain('PLAIN_TKN');
+    expect(out).toContain('PLAIN_CVV');
+    expect(out).toContain('09/2028');
+  });
+
   it('relays a decline as exit 1 without crashing', async () => {
     captured.response = {
       status: 200,

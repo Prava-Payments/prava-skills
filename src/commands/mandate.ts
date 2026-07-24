@@ -19,6 +19,33 @@ export function mandateClient(): PravaClient {
   return new PravaClient();
 }
 
+interface MandateRequestOpts {
+  method: 'GET' | 'POST';
+  path: string;
+  body?: Record<string, unknown>;
+  agentId?: string;
+  privateKey?: string;
+}
+
+/**
+ * Wraps client.request, converting a thrown transport error (network blip, DNS failure, abort/
+ * timeout) into the SAME `{status, data}` shape every caller already branches on — a synthetic
+ * 5xx-range status (599, the conventional "network connect timeout" code) so:
+ *   - poll's loop, which already treats a real 5xx as transient and keeps polling, does the same
+ *     for a blip with no extra branching (mirrors sessions.ts's poll try/catch, but DRY);
+ *   - every one-shot command's existing `res.status >= 400` guard turns it into a clean `✗ ...` +
+ *     exit 1 instead of an unhandled rejection / raw stack trace.
+ * Not a retry — callers decide what "continue" or "exit" means for their own loop, if any.
+ */
+async function mandateRequest<T>(client: PravaClient, opts: MandateRequestOpts): Promise<{ status: number; data: T }> {
+  try {
+    return await client.request<T>(opts);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return { status: 599, data: { error: { message: `request failed: ${msg}` } } as T };
+  }
+}
+
 export interface AgentIds { agentId: string; privateKey: string; publicKey: string; }
 
 export async function requireAgent(): Promise<AgentIds> {
@@ -97,7 +124,7 @@ export async function mandateCreateCommand(opts: {
     refuse: 'mandate setup not confirmed — confirm the merchant, cap and period with the user, then re-run with --yes.',
   });
 
-  const res = await mandateClient().request<any>({
+  const res = await mandateRequest<any>(mandateClient(), {
     method: 'POST',
     path: '/v1/sessions',
     body: {
@@ -129,14 +156,17 @@ export async function mandateCreateCommand(opts: {
 
 export async function mandateListCommand(opts: { merchant?: string; json?: boolean }): Promise<void> {
   const { agentId, privateKey } = await requireAgent();
-  const res = await mandateClient().request<{ mandates?: MandateRow[] }>({
+  const res = await mandateRequest<{ mandates?: MandateRow[]; error?: { message?: string } }>(mandateClient(), {
     method: 'GET', path: '/v1/mandates', agentId, privateKey,
   });
-  let mandates = res.data?.mandates ?? [];
-  if (opts.merchant) {
-    const m = opts.merchant.toLowerCase();
-    mandates = mandates.filter((x) => x.merchantScope === 'any' || (x.merchantName ?? '').toLowerCase().includes(m));
+  if (res.status >= 400) {
+    console.error(`\n✗ Could not list mandates: ${res.data?.error?.message ?? JSON.stringify(res.data)}`);
+    process.exit(1);
   }
+  // Same bidirectional match as `poll` (merchantMatches) — otherwise `list --merchant <url>` and
+  // `poll --merchant <url>` could disagree on the same mandate (create's own hint tells the user
+  // to pass the merchant URL, which is longer than a stored short merchantName).
+  const mandates = (res.data?.mandates ?? []).filter((x) => merchantMatches(x, opts.merchant));
   if (opts.json) { console.log(JSON.stringify(mandates, null, 2)); return; }
   if (!mandates.length) { console.log('No mandates.'); return; }
   for (const x of mandates) {
@@ -152,7 +182,7 @@ function merchantMatches(row: MandateRow, filter?: string): boolean {
   if (row.merchantScope === 'any') return true;
   const name = (row.merchantName ?? '').toLowerCase();
   const f = filter.toLowerCase();
-  return name.includes(f) || f.includes(name) && name.length > 0;
+  return name.includes(f) || (f.includes(name) && name.length > 0);
 }
 
 export async function mandatePollCommand(opts: { merchant?: string; amount?: string; json?: boolean }): Promise<void> {
@@ -161,9 +191,21 @@ export async function mandatePollCommand(opts: { merchant?: string; amount?: str
   let delay = 3000;
   // ponytail: newest-active-match heuristic — core has no session→mandate correlation (spec §7.2).
   while (Date.now() < deadline) {
-    const res = await mandateClient().request<{ mandates?: MandateRow[] }>({
+    const res = await mandateRequest<{ mandates?: MandateRow[]; error?: { message?: string } }>(mandateClient(), {
       method: 'GET', path: '/v1/mandates', agentId, privateKey,
     });
+    if (res.status >= 400) {
+      if (res.status < 500) {
+        // 4xx (auth/permissions/etc.) won't fix itself on the next tick — surface it now instead
+        // of silently retrying for the full 10 minutes and reporting a misleading "timed out".
+        console.error(`\n✗ Could not check mandates: ${res.data?.error?.message ?? JSON.stringify(res.data)}`);
+        process.exit(1);
+      }
+      // 5xx — including a transport blip that mandateRequest mapped to 599 — is transient; keep polling.
+      await new Promise((r) => setTimeout(r, delay));
+      delay = Math.min(Math.floor(delay * 1.5), 20000);
+      continue;
+    }
     const match = (res.data?.mandates ?? [])
       .filter((x) => x.status === 'active')
       .filter((x) => merchantMatches(x, opts.merchant))
@@ -198,7 +240,7 @@ export async function mandateChargeCommand(opts: {
   if (opts.reference) body.reference = opts.reference;
   if (products.length) body.purchase_context = [{ product_details: products }];
 
-  const res = await mandateClient().request<any>({
+  const res = await mandateRequest<any>(mandateClient(), {
     method: 'POST', path: `/v1/mandates/${opts.mandateId}/charge`, body, agentId, privateKey,
   });
   const d: any = res.data ?? {};
@@ -242,7 +284,7 @@ export async function mandateReportCommand(opts: {
   if (opts.authorizationCode) body.authorization_code = opts.authorizationCode;
   if (opts.responseCode) body.response_code = opts.responseCode;
   if (opts.amountPaid) body.amount_paid = opts.amountPaid;
-  const res = await mandateClient().request<any>({
+  const res = await mandateRequest<any>(mandateClient(), {
     method: 'POST', path: `/v1/mandates/${opts.mandateId}/charges/${opts.txnId}/report`, body, agentId, privateKey,
   });
   const d: any = res.data ?? {};
@@ -258,7 +300,7 @@ export async function mandateCancelCommand(opts: { mandateId: string; yes?: bool
     tty: `Cancel this mandate? This revokes the authorization.`,
     refuse: 'cancel not confirmed — confirm with the user, then re-run with --yes.',
   });
-  const res = await mandateClient().request<any>({
+  const res = await mandateRequest<any>(mandateClient(), {
     method: 'POST', path: `/v1/mandates/${opts.mandateId}/cancel`, agentId, privateKey,
   });
   const d: any = res.data ?? {};
