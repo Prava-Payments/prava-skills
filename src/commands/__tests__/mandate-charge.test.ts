@@ -99,4 +99,48 @@ describe('mandateChargeCommand', () => {
     await expect(mandateChargeCommand({ mandateId: 'mdt_1', amount: '999.00', yes: true })).rejects.toThrow('EXIT_1');
     expect(errs.join('\n')).toContain('THRESHOLD_EXCEEDED');
   });
+
+  it('a 4xx/5xx HTTP response is a clean "Charge failed" + exit 1, not a body-dump', async () => {
+    captured.response = {
+      status: 599,
+      data: { error: { message: 'request failed: fetch failed' } },
+      headers: {},
+    };
+    const { mandateChargeCommand } = await import('../mandate');
+    await expect(mandateChargeCommand({ mandateId: 'mdt_1', amount: '40.00', yes: true })).rejects.toThrow('EXIT_1');
+    expect(errs.join('\n')).toContain('✗ Charge failed');
+    expect(errs.join('\n')).toContain('request failed: fetch failed');
+  });
+
+  it('--json still prints the body but exits 1 on a res.status >= 400 response', async () => {
+    captured.response = {
+      status: 401,
+      data: { error: { message: 'Invalid signature' } },
+      headers: {},
+    };
+    const { mandateChargeCommand } = await import('../mandate');
+    await expect(mandateChargeCommand({ mandateId: 'mdt_1', amount: '40.00', yes: true, json: true })).rejects.toThrow('EXIT_1');
+    expect(logs.join('\n')).toContain('Invalid signature');
+  });
+
+  it('a decrypt failure (bad GCM auth tag) is a clean stderr message + exit 1, not a raw stack', async () => {
+    const decrypt = await import('../../crypto/decrypt.js');
+    vi.spyOn(decrypt, 'decryptTokenPayload').mockImplementation(() => {
+      throw new Error('Unsupported state or unable to authenticate data');
+    });
+    captured.response = {
+      status: 200,
+      data: {
+        status: 'awaiting_result', transactionId: 'txn_3',
+        encrypted_payload: { ephemeral_public_key: 'e', iv: 'i', auth_tag: 'a', data: 'd' },
+      },
+      headers: {},
+    };
+    const { mandateChargeCommand } = await import('../mandate');
+    await expect(mandateChargeCommand({ mandateId: 'mdt_1', amount: '40.00', yes: true })).rejects.toThrow('EXIT_1');
+    const errOut = errs.join('\n');
+    expect(errOut).toContain('✗ Could not decrypt the mandate charge credentials');
+    expect(errOut).toContain('Unsupported state or unable to authenticate data');
+    expect(errOut).not.toContain('at decryptTokenPayload'); // no raw stack trace
+  });
 });

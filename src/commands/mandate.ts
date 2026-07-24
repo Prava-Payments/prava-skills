@@ -143,7 +143,11 @@ export async function mandateCreateCommand(opts: {
   });
 
   const d: any = res.data ?? {};
-  if (opts.json) { console.log(JSON.stringify(d, null, 2)); return; }
+  if (opts.json) {
+    console.log(JSON.stringify(d, null, 2));
+    if (res.status >= 400) process.exit(1);
+    return;
+  }
   if (res.status >= 400 || !d.iframe_url) {
     console.error(`\n✗ Could not start mandate setup: ${d?.error?.message ?? JSON.stringify(d)}`);
     process.exit(1);
@@ -244,7 +248,16 @@ export async function mandateChargeCommand(opts: {
     method: 'POST', path: `/v1/mandates/${opts.mandateId}/charge`, body, agentId, privateKey,
   });
   const d: any = res.data ?? {};
-  if (opts.json) { console.log(JSON.stringify(d, null, 2)); return; }
+  if (opts.json) {
+    console.log(JSON.stringify(d, null, 2));
+    if (res.status >= 400 || d.status === 'failed' || d.fetchStatus === 'FAILURE') process.exit(1);
+    return;
+  }
+
+  if (res.status >= 400) {
+    console.error(`\n✗ Charge failed: ${d.error?.message ?? d.errorMessage ?? 'request failed'}`);
+    process.exit(1);
+  }
 
   if (d.status === 'failed' || d.fetchStatus === 'FAILURE') {
     console.error(`\n✗ Charge declined: ${d.errorMessage ?? d.errorCode ?? 'unknown reason'}`);
@@ -254,7 +267,13 @@ export async function mandateChargeCommand(opts: {
   // Preferred: encrypted_payload (core §7.1). Transitional fallback: plaintext credentials.
   let creds: { token: string; cryptogram: string; expiry_month: string; expiry_year: string } | null = null;
   if (d.encrypted_payload) {
-    creds = decryptTokenPayload(d.encrypted_payload as EncryptedPayload, publicKey);
+    try {
+      creds = decryptTokenPayload(d.encrypted_payload as EncryptedPayload, publicKey);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error(`\n✗ Could not decrypt the mandate charge credentials: ${msg}`);
+      process.exit(1);
+    }
   } else if (d.credentials) {
     creds = {
       token: d.credentials.token, cryptogram: d.credentials.dynamicCvv,
@@ -288,7 +307,11 @@ export async function mandateReportCommand(opts: {
     method: 'POST', path: `/v1/mandates/${opts.mandateId}/charges/${opts.txnId}/report`, body, agentId, privateKey,
   });
   const d: any = res.data ?? {};
-  if (opts.json) { console.log(JSON.stringify(d, null, 2)); return; }
+  if (opts.json) {
+    console.log(JSON.stringify(d, null, 2));
+    if (res.status >= 400) process.exit(1);
+    return;
+  }
   if (res.status >= 400) { console.error(`\n✗ Report failed: ${d?.error?.message ?? JSON.stringify(d)}`); process.exit(1); }
   console.log(`\n✓ Charge ${d.status ?? 'reported'}.`);
 }
@@ -304,7 +327,11 @@ export async function mandateCancelCommand(opts: { mandateId: string; yes?: bool
     method: 'POST', path: `/v1/mandates/${opts.mandateId}/cancel`, agentId, privateKey,
   });
   const d: any = res.data ?? {};
-  if (opts.json) { console.log(JSON.stringify(d, null, 2)); return; }
+  if (opts.json) {
+    console.log(JSON.stringify(d, null, 2));
+    if (res.status >= 400) process.exit(1);
+    return;
+  }
   if (res.status >= 400) { console.error(`\n✗ Cancel failed: ${d?.error?.message ?? JSON.stringify(d)}`); process.exit(1); }
   console.log(`\n✓ Mandate cancelled.`);
 }
