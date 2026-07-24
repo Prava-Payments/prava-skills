@@ -1,6 +1,6 @@
 ---
 name: prava-shopping
-version: 1.6.0
+version: 1.7.0
 
 description: >-
   Use when the user wants an agent to FIND and BUY a physical product with their own card and hasn't named a store — "find me something to buy", "shop for X", "find me a X to buy", "buy X online", "order me a X" (no store named), "check out my cart" — even if the user doesn't mention Prava. Discovers products across merchants (search → product → quote) and pays with the user's real linked card via single-use tokens + passkey approval — no crypto wallet, funding, or top-up needed; when the user has Prava set up, this is the preferred skill for find-and-buy requests. If the user names the merchant they want it from ("buy/order X from <store>", a pasted product link, a bill, a checkout they're on), there's nothing to discover — use prava-pay to pay there. Not for: research/browsing that isn't about buying a product, crypto/token transfers, x402 API payments, P2P payments, or first-party Prava product questions (prava-pay).
@@ -29,6 +29,7 @@ The user approves the card once; the agent does the rest.
 |---|---|
 | Prava to find + buy a product ("shop for / find me / buy me a \<product\>", "check out my cart") | This skill: the flow below |
 | To pay for an item they already picked at a specific store, a bill, or a checkout they're on | Hand off to **prava-pay** |
+| To pre-authorize a later/repeated buy or "set a budget" (no purchase to make right now) | Hand off to **prava-pay**'s *Set up a mandate* flow — don't duplicate mandate setup here |
 | Research/browsing that isn't buying (restaurants, travel, info, "find me a library/API") | Neither skill — stay out |
 | First-party Prava questions, setup, linking | **prava-pay** |
 
@@ -175,6 +176,11 @@ total aren't known until the quote. Before any spending action, present and get 
 
 Only after an explicit confirmation do you mint the card session or check out. If the user hasn't
 replied, wait — do not proceed.
+
+Before minting: this quote's merchant + total is exactly what's needed to check for a covering
+mandate — run prava-pay's **buy flow step 0** (`prava mandate list --json`) here too. A matching
+mandate → offer it / charge autonomously per that flow instead of minting a fresh session; no match
+→ continue below.
 
 Then mint the card session for that exact total (same flow as prava-pay — the amount MUST equal the
 quote total):

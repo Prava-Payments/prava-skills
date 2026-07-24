@@ -22,13 +22,21 @@ import {
   shopAddressAddCommand,
   shopAddressDefaultCommand,
 } from './commands/shop.js';
+import {
+  mandateCreateCommand,
+  mandateListCommand,
+  mandatePollCommand,
+  mandateChargeCommand,
+  mandateReportCommand,
+  mandateCancelCommand,
+} from './commands/mandate.js';
 
 const program = new Command();
 
 program
   .name('prava')
   .description('Prava CLI — smart wallet for AI agents')
-  .version('3.0.3');
+  .version('3.1.0');
 
 const setup = program
   .command('setup')
@@ -234,5 +242,89 @@ shop
       json: opts.json,
     });
   });
+
+const mandate = program
+  .command('mandate')
+  .description('Authorize a card once, then charge it later within caps (mandates)');
+
+mandate
+  .command('create')
+  .description('Set up a mandate (authorize now, buy later) — returns a passkey approval URL')
+  .requiredOption('--amount <amount>', 'Spend cap as a string (e.g. "120.00")')
+  .requiredOption('--currency <code>', 'ISO 4217 currency code (e.g. USD)')
+  .option('--merchant-name <name>', 'Merchant display name (required unless --scope any)')
+  .option('--merchant-url <url>', 'Merchant https URL (required unless --scope any)')
+  .option('--merchant-country <cc>', 'ISO 3166-1 alpha-2 (required unless --scope any)')
+  .option('--frequency <freq>', 'one_time (default) | weekly | monthly | yearly')
+  .option('--scope <scope>', 'any | listed (default listed; forced listed for recurring)')
+  .option('--product <json>', 'Product JSON (repeatable)', (v: string, prev: string[]) => prev.concat([v]), [] as string[])
+  .option('--valid-until <iso>', 'Validity hint (one_time is capped at 7 days by the server)')
+  .option('--max-charges <n>', 'Max number of charges (stored; not enforced server-side today)')
+  .option('-y, --yes', 'Confirm — pass ONLY after the user approved the merchant/cap/period')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => {
+    await mandateCreateCommand({
+      merchantName: opts.merchantName, merchantUrl: opts.merchantUrl, merchantCountry: opts.merchantCountry,
+      amount: opts.amount, currency: opts.currency, frequency: opts.frequency, scope: opts.scope,
+      product: opts.product, validUntil: opts.validUntil, maxCharges: opts.maxCharges,
+      yes: opts.yes, json: opts.json,
+    });
+  });
+
+mandate
+  .command('list')
+  .description('List your mandates (what you have already authorized)')
+  .option('--merchant <domain>', 'Filter to a merchant (client-side; also matches any-scope mandates)')
+  .option('--json', 'Output raw JSON (includes ids for chaining)')
+  .action(async (opts) => { await mandateListCommand({ merchant: opts.merchant, json: opts.json }); });
+
+mandate
+  .command('poll')
+  .description('Wait until a just-created mandate is active (after the user approves with a passkey)')
+  .option('--merchant <domain>', 'Disambiguate by merchant')
+  .option('--amount <amount>', 'Disambiguate by approved cap')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => { await mandatePollCommand({ merchant: opts.merchant, amount: opts.amount, json: opts.json }); });
+
+mandate
+  .command('charge')
+  .description('Charge an approved mandate (no passkey) — returns a single-use token + cryptogram')
+  .requiredOption('--mandate-id <id>', 'Mandate id (from `mandate list --json`; not shown to the user)')
+  .requiredOption('--amount <amount>', 'Amount to charge as a string')
+  .option('--reference <ref>', 'Idempotency reference (dedup per mandate+reference)')
+  .option('--product <json>', 'Per-charge product JSON (repeatable; defaults to the mandate context)', (v: string, prev: string[]) => prev.concat([v]), [] as string[])
+  .option('-y, --yes', 'Confirm — pass after the user accepted the offer, or for a standing instruction')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => {
+    await mandateChargeCommand({
+      mandateId: opts.mandateId, amount: opts.amount, reference: opts.reference,
+      product: opts.product, yes: opts.yes, json: opts.json,
+    });
+  });
+
+mandate
+  .command('report')
+  .description('Report a mandate charge outcome to settle it')
+  .requiredOption('--mandate-id <id>', 'Mandate id')
+  .requiredOption('--txn-id <id>', 'Transaction id from `mandate charge`')
+  .requiredOption('--status <status>', 'APPROVED | DECLINED')
+  .option('--authorization-code <code>', 'Acquirer auth code')
+  .option('--response-code <code>', 'Acquirer response code')
+  .option('--amount-paid <amount>', 'Amount actually paid')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => {
+    await mandateReportCommand({
+      mandateId: opts.mandateId, txnId: opts.txnId, status: opts.status,
+      authorizationCode: opts.authorizationCode, responseCode: opts.responseCode, amountPaid: opts.amountPaid, json: opts.json,
+    });
+  });
+
+mandate
+  .command('cancel')
+  .description('Revoke a mandate (stops future charges)')
+  .requiredOption('--mandate-id <id>', 'Mandate id')
+  .option('-y, --yes', 'Confirm the cancellation')
+  .option('--json', 'Output raw JSON')
+  .action(async (opts) => { await mandateCancelCommand({ mandateId: opts.mandateId, yes: opts.yes, json: opts.json }); });
 
 program.parse();

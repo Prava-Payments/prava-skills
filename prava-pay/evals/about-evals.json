@@ -181,6 +181,19 @@
         "Answer does NOT run 'which prava', 'prava status', 'prava setup', or any other CLI command — the user only asked for information",
         "Answer may offer to help the user set up the wallet AFTER answering the question, but does not auto-execute setup"
       ]
+    },
+    {
+      "id": 16,
+      "prompt": "What's a mandate, how long does it last, and can I cancel it?",
+      "expected_output": "Answer covers the 7-day maximum period for a one_time mandate, the distinction between a merchant-scoped mandate and a broader/generic one, that the agent still offers/confirms purchases against the mandate rather than acting fully autonomously, and that mandates can be cancelled via `prava mandate cancel` (or the Activity tab) with future charges stopping immediately.",
+      "files": [],
+      "expectations": [
+        "Answer defines a mandate as a standing authorization with a spending cap that lets the agent buy without a fresh passkey approval each time",
+        "Answer states the maximum period for a one_time mandate is 7 days",
+        "Answer distinguishes a merchant-scoped mandate (e.g. tied to Nike) from a broader/generic mandate",
+        "Answer explains the agent still offers/confirms the specific purchase against the mandate rather than charging fully autonomously without telling the user",
+        "Answer explains cancellation — via `prava mandate cancel` or the Activity tab — and that cancelling stops future charges immediately without affecting past transactions"
+      ]
     }
   ]
 }

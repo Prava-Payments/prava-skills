@@ -86,8 +86,11 @@ Device biometrics — Face ID / Touch ID on iPhone, fingerprint on Android, Wind
 
 ## Mandates
 
-- A mandate is an **ongoing authorization** the user grants the agent for a recurring spend pattern with a limit. Example: a $100 mandate for a grocery delivery service lets the agent reorder without asking each time, until the limit is used.
-- **Revoke:** Activity tab → find the mandate → revoke. This stops all future charges immediately. Past transactions are not affected.
+- A mandate is an authorization the user grants **once** (via passkey) that lets the agent charge later **without** re-approval, up to a cap.
+- **One-time / generic mandates** last **up to 7 days** — meant for a single upcoming purchase or a short-lived budget (e.g. "$200 to spend this week"). They can be scoped to one merchant or left open to any merchant.
+- **Recurring mandates** (weekly / monthly / yearly) are always **locked to a single merchant** and allow **one charge per period** — e.g. a monthly mandate for a grocery delivery service lets the agent reorder once a month without asking again, until the mandate is cancelled.
+- **How the agent uses a mandate:** when the user is present, the agent offers it before charging (e.g. "pay the $40 from your Nike mandate?"); for a standing instruction given up front (e.g. "buy it when it drops to $90"), the agent can charge autonomously within the mandate's cap — the original passkey approval is the user's consent, so no new prompt is required for that charge.
+- **Revoke:** the agent can cancel it directly (`prava mandate cancel`), or the user can revoke it from the dashboard's Activity tab → find the mandate → revoke. Either way this stops all future charges immediately. Past transactions are not affected.
 
 ---
 

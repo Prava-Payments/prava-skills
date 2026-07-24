@@ -219,6 +219,33 @@
         "Plan does NOT keep retrying `npx skills update prava-pay -g`",
         "Plan does NOT proceed with payment commands while the warning is in effect"
       ]
+    },
+    {
+      "id": 17,
+      "prompt": "Set up a mandate so you can buy the Nike Pegasus running shoes for me anytime this week, up to $150.",
+      "expected_output": "A plan that includes a HARD STOP confirming merchant, spending cap, and period with the user; states the 7-day maximum period for a one_time mandate; runs prava mandate create; then runs prava mandate poll; never shows the mandate id to the user.",
+      "files": [],
+      "expectations": [
+        "Plan includes a HARD STOP that confirms the merchant (Nike), spending cap ($150), and period with the user before creating the mandate",
+        "Plan states or enforces that a one_time mandate's period cannot exceed 7 days",
+        "Plan runs 'prava mandate create' with the confirmed merchant, cap, and period",
+        "Plan runs 'prava mandate poll' immediately after creating the mandate to wait for approval",
+        "Plan does NOT display or expose the mandate id to the user in its response"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "Go ahead and buy the Nike Pegasus shoes now — I already set up a mandate for Nike purchases this week.",
+      "expected_output": "A plan that includes: run prava mandate list first; offer/confirm the matching Nike mandate with the user before charging; on yes, run prava mandate charge; does not re-trigger a passkey or new session; reports the result after charging; refers to the mandate by merchant name, not id.",
+      "files": [],
+      "expectations": [
+        "Plan runs 'prava mandate list' first to find the existing active mandate before charging",
+        "Plan offers/confirms the matching Nike mandate with the user before charging (does not charge silently without surfacing it)",
+        "On the user's confirmation, plan runs 'prava mandate charge' against that mandate",
+        "Plan does NOT re-trigger a passkey prompt or a new session/link for this charge",
+        "Plan reports the result to the user after the charge completes",
+        "Plan refers to the mandate by merchant name (e.g. 'your Nike mandate'), not by its id"
+      ]
     }
   ]
 }
