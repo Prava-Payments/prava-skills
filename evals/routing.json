@@ -251,6 +251,30 @@
       "prompt": "Top up my agent's wallet with some USDC.",
       "expected": "lobstercash",
       "category": "competitor-must-lose"
+    },
+    {
+      "id": 43,
+      "prompt": "authorize you to buy these Nike shoes next week",
+      "expected": "prava-pay",
+      "category": "mandate-setup"
+    },
+    {
+      "id": 44,
+      "prompt": "give you a $200 budget to spend this week",
+      "expected": "prava-pay",
+      "category": "mandate-setup"
+    },
+    {
+      "id": 45,
+      "prompt": "buy the Nikes when they drop to $90",
+      "expected": "prava-pay",
+      "category": "mandate-setup"
+    },
+    {
+      "id": 46,
+      "prompt": "buy this hoodie from nike.com now",
+      "expected": "prava-pay",
+      "category": "pay"
     }
   ]
 }
