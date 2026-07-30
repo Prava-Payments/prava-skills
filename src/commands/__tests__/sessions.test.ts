@@ -87,6 +87,7 @@ describe('sessionsCreateCommand', () => {
     delete process.env.PRAVA_STATE_DIR;
   });
 
+  // Verifies session creation normalizes request fields and prints the values needed for polling.
   it('POSTs to /v1/sessions/agent with uppercased currency/country and prints the session id + payment URL', async () => {
     const { sessionsCreateCommand } = await import('../sessions');
     await sessionsCreateCommand({
@@ -117,6 +118,7 @@ describe('sessionsCreateCommand', () => {
     expect(out).toContain('prava sessions poll --session-id sess_1');
   });
 
+  // Ensures product quantities default to one when callers omit the optional field.
   it('defaults quantity to 1 when omitted in the product JSON', async () => {
     const { sessionsCreateCommand } = await import('../sessions');
     await sessionsCreateCommand({
@@ -133,6 +135,7 @@ describe('sessionsCreateCommand', () => {
     ]);
   });
 
+  // Confirms malformed product input fails locally before a session request is attempted.
   it('exits 1 on invalid product JSON', async () => {
     const { sessionsCreateCommand } = await import('../sessions');
     await expect(
@@ -148,6 +151,7 @@ describe('sessionsCreateCommand', () => {
     expect(errs.join('\n')).toContain('Invalid product JSON');
   });
 
+  // Ensures session-creation API failures surface a useful message and error exit code.
   it('exits 1 when the server returns a non-2xx status', async () => {
     captured.responses = [
       { status: 402, data: { error: { message: 'Insufficient funds' } }, headers: {} },
@@ -167,6 +171,7 @@ describe('sessionsCreateCommand', () => {
     expect(errs.join('\n')).toContain('Insufficient funds');
   });
 
+  // Confirms session creation stops with setup guidance when no local agent exists.
   it('exits 2 when no agent is configured', async () => {
     // Remove the agent file
     rmSync(join(dir, 'agent.json'), { force: true });
@@ -184,6 +189,7 @@ describe('sessionsCreateCommand', () => {
     expect(errs.join('\n')).toContain('No agent configured');
   });
 
+  // Verifies a locally unlinked agent remains blocked when the server reports a pending link.
   it('auto-checks link status and exits 2 when the server says not approved', async () => {
     // Seed an unlinked agent
     rmSync(join(dir, 'agent.json'), { force: true });
@@ -206,6 +212,7 @@ describe('sessionsCreateCommand', () => {
     expect(errs.join('\n')).toContain('Agent not linked');
   });
 
+  // Ensures server approval repairs stale local link state before creating the session.
   it('auto-checks link status, upgrades to linked, and proceeds when the server says approved', async () => {
     // Seed an unlinked agent that the server will confirm as approved
     rmSync(join(dir, 'agent.json'), { force: true });
@@ -274,6 +281,7 @@ describe('sessionsPollCommand', () => {
     vi.useRealTimers();
   });
 
+  // Verifies polling waits through pending status and prints decrypted card credentials on completion.
   it('polls until status=completed, then decrypts and prints token + cryptogram + expiry', async () => {
     captured.responses = [
       { status: 200, data: { session_id: 'sess_1', status: 'pending' }, headers: {} },
@@ -301,28 +309,35 @@ describe('sessionsPollCommand', () => {
     expect(out).toContain('12/2027');
   });
 
+  // Confirms a failed tokenization response reports the failure and requests exit code one.
   it('exits 1 when the session status is failed', async () => {
     captured.responses = [
       { status: 200, data: { session_id: 'sess_1', status: 'failed' }, headers: {} },
+      {
+        status: 200,
+        data: {
+          session_id: 'sess_1',
+          status: 'completed',
+          encrypted_payload: { ephemeral_public_key: 'e', iv: 'i', auth_tag: 'a', data: 'd' },
+        },
+        headers: {},
+      },
     ];
 
     const { sessionsPollCommand } = await import('../sessions');
     const promise = sessionsPollCommand({ sessionId: 'sess_1' });
-    // The poll loop's try/catch catches process.exit (thrown as EXIT_1 by our spy)
-    // only if it's inside the try. But process.exit for "failed" is inside the try
-    // block, so the catch will swallow it. We need to detect it differently:
-    // the "failed" branch calls console.error then process.exit(1).
-    // Since the catch block swallows the EXIT_1 throw, the loop continues.
-    // To properly test this, we check that the error message was printed.
     await vi.advanceTimersByTimeAsync(3_000);
-    // Allow the microtask queue to settle
-    await vi.waitFor(() => {
-      expect(errs.join('\n')).toContain('Tokenization failed');
-    }, { timeout: 2000 });
-    // The promise may still be pending (loop continues after catch). Clean up.
-    // We don't await the promise since the loop continues after the catch.
+
+    expect(exitSpy).toHaveBeenCalledWith(1);
+    expect(errs.join('\n')).toContain('Tokenization failed');
+
+    // The production process exits immediately. Let the mocked loop complete so
+    // the test does not leave a pending promise after the throwing exit spy is caught.
+    await vi.advanceTimersByTimeAsync(4_500);
+    await promise;
   });
 
+  // Ensures polling cannot start without a locally configured agent.
   it('exits 2 when no agent is configured', async () => {
     rmSync(join(dir, 'agent.json'), { force: true });
     const { sessionsPollCommand } = await import('../sessions');
@@ -330,6 +345,7 @@ describe('sessionsPollCommand', () => {
     expect(errs.join('\n')).toContain('No agent configured');
   });
 
+  // Ensures polling rejects configured agents that have not completed linking.
   it('exits 2 when agent exists but is not linked', async () => {
     rmSync(join(dir, 'agent.json'), { force: true });
     seedAgent(dir, false);
@@ -338,6 +354,7 @@ describe('sessionsPollCommand', () => {
     expect(errs.join('\n')).toContain('Agent not linked');
   });
 
+  // Verifies a temporary request failure does not abort a poll that later succeeds.
   it('continues polling through transient network errors', async () => {
     // First poll throws (network error), second poll returns completed.
     captured.throwNext = true;
