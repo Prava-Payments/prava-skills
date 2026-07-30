@@ -20,14 +20,14 @@ You'll receive three credentials when your merchant account is created:
 |---|---|---|
 | **Secret Key** | `sk_test_xxx` / `sk_live_xxx` | Server-side **ONLY** — never expose to the client |
 | **Publishable Key** | `pk_test_xxx` / `pk_live_xxx` | Client-side — safe for the browser |
-| **Backend URL** | `https://api.prava.space` | API base URL (sandbox shown) |
+| **Backend URL** | `https://sandbox.api.prava.space` | API base URL (sandbox shown) |
 
 Add them to your environment (`.env` / `.env.local`):
 
 ```env
 MERCHANT_SECRET_KEY=sk_test_your_secret_key          # Server-side ONLY
 NEXT_PUBLIC_PUBLISHABLE_KEY=pk_test_your_pub_key      # Client-side safe
-NEXT_PUBLIC_BACKEND_URL=https://api.prava.space
+NEXT_PUBLIC_BACKEND_URL=https://sandbox.api.prava.space
 ```
 
 > ⚠️ **Never expose `MERCHANT_SECRET_KEY` in client-side code or environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`.**
@@ -49,7 +49,7 @@ const response = await fetch(`${process.env.BACKEND_URL}/v1/sessions`, {
   body: JSON.stringify({
     user_id: 'user_123',
     user_email: 'user@example.com',
-    amount: '49.99',
+    total_amount: '49.99',
     currency: 'USD',
     description: 'AI-assisted purchase',
     purchase_context: [{
@@ -62,7 +62,7 @@ const response = await fetch(`${process.env.BACKEND_URL}/v1/sessions`, {
       },
       product_details: [{
         description: 'Premium Plan — Monthly',
-        amount: '49.99',
+        unit_price: '49.99',
         quantity: 1,
       }],
       effective_until_minutes: 15,  // Optional: defaults to 15
@@ -225,7 +225,7 @@ async function pollForCredential(sessionId: string): Promise<any> {
 
     if (data.status === 'completed') {
       // Credential is ready!
-      const txn = data.transactions[0];
+      const txn = data.transactions[0].line_items[0];
       return {
         token: txn.token,              // Network token (16 digits)
         dynamic_cvv: txn.dynamic_cvv,  // One-time CVV
