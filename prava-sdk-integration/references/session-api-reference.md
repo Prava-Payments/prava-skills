@@ -2,6 +2,15 @@
 
 The Session API is the server-side entry point for every Prava payment flow. Your backend calls this endpoint to create a session, which returns the `session_token` and `iframe_url` needed for the frontend.
 
+### Base URLs
+
+| Environment | Base URL | Keys |
+|-------------|----------|------|
+| **Sandbox** | `https://sandbox.api.prava.space` | `sk_test_*` / `pk_test_*` |
+| **Production** | `https://api.prava.space` | `sk_live_*` / `pk_live_*` |
+
+Examples below use the sandbox URL. Keys and URLs must match environments — `sk_test_` keys don't work against production, and vice versa.
+
 ---
 
 ## Create Session
@@ -37,15 +46,15 @@ Authorization: Bearer sk_test_xxxxx
   "purchase_context": [
     {
       "merchant_details": {
-        "name": "My AI App",
-        "url": "https://myaiapp.com",
+        "name": "PackRight Supplies",
+        "url": "https://packright-supplies.com",
         "country_code_iso2": "US",
-        "category_code": "5734",
-        "category": "Software Services"
+        "category_code": "5943",
+        "category": "Office Supplies"
       },
       "product_details": [
         {
-          "description": "Premium AI Assistant - Monthly",
+          "description": "Packing tape — 3 pack",
           "unit_price": "99.99",
           "quantity": 1
         }
@@ -76,12 +85,14 @@ Authorization: Bearer sk_test_xxxxx
 
 ### Purchase Context Entry
 
-Each entry in `purchase_context` describes a merchant and their products:
+Each entry in `purchase_context` describes a merchant and their products.
+
+> **`merchant_details` is the destination merchant** — the business the user is buying from, **not** the integrating app. The `name` renders as the header on the checkout page and is forwarded to the card network as the merchant of record for the token.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `merchant_details` | `object` | ✅ | Merchant information |
-| `merchant_details.name` | `string` | ✅ | Merchant/app name |
+| `merchant_details` | `object` | ✅ | Destination merchant information (where the user is buying) |
+| `merchant_details.name` | `string` | ✅ | Destination merchant name — shown to the user on the checkout page |
 | `merchant_details.url` | `string` | ✅ | Merchant website URL (must be valid URL) |
 | `merchant_details.country_code_iso2` | `string` | ✅ | 2 uppercase letters (ISO 3166-1 alpha-2) |
 | `merchant_details.category_code` | `string` | | MCC code (max 10 chars) |
@@ -196,8 +207,8 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
       "line_items": [
         {
           "txn_ref_id": "tli_01KKW...",
-          "merchant_name": "My AI App",
-          "merchant_url": "https://myaiapp.com",
+          "merchant_name": "PackRight Supplies",
+          "merchant_url": "https://packright-supplies.com",
           "total_amount": "99.99",
           "status": "completed",
           "token": "4323126882557932",
@@ -286,7 +297,7 @@ async function pollForCredential(sessionId: string): Promise<any> {
 ### cURL Example
 
 ```bash
-curl -s https://api.prava.space/v1/sessions/{session_id}/payment-result \
+curl -s https://sandbox.api.prava.space/v1/sessions/{session_id}/payment-result \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" | jq
 ```
 
@@ -364,7 +375,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
 ### cURL Example
 
 ```bash
-curl -X POST "https://api.prava.space/v1/sessions/sess_01KKW.../report-status" \
+curl -X POST "https://sandbox.api.prava.space/v1/sessions/sess_01KKW.../report-status" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
   -d '{
@@ -419,7 +430,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
 ### cURL Example
 
 ```bash
-curl "https://api.prava.space/v1/listCards?customer_id=user_123" \
+curl "https://sandbox.api.prava.space/v1/listCards?customer_id=user_123" \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY"
 ```
 
@@ -477,7 +488,7 @@ const isHealthy = await fetch(`${BACKEND_URL}/health`)
 ### Create Session
 
 ```bash
-curl -X POST https://api.prava.space/v1/sessions \
+curl -X POST https://sandbox.api.prava.space/v1/sessions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk_test_YOUR_SECRET_KEY" \
   -d '{
@@ -489,8 +500,8 @@ curl -X POST https://api.prava.space/v1/sessions \
     "purchase_context": [
       {
         "merchant_details": {
-          "name": "My App",
-          "url": "https://myapp.com",
+          "name": "PackRight Supplies",
+          "url": "https://packright-supplies.com",
           "country_code_iso2": "US"
         },
         "product_details": [
@@ -508,7 +519,7 @@ curl -X POST https://api.prava.space/v1/sessions \
 ### Check Health
 
 ```bash
-curl https://api.prava.space/health
+curl https://sandbox.api.prava.space/health
 ```
 
 ---

@@ -3,7 +3,7 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Integrate Prava payments into my Next.js 14 App Router app to charge users $20/month for a Pro plan. My keys are pk_test_abc and sk_test_xyz, backend is https://api.prava.space.",
+      "prompt": "Integrate Prava payments into my Next.js 14 App Router app to charge users $20/month for a Pro plan. My keys are pk_test_abc and sk_test_xyz, backend is https://sandbox.api.prava.space.",
       "expected_output": "Plan installs SDK, sets env vars correctly (NEXT_PUBLIC_ on publishable key + backend URL only, never on secret key), creates a server action / route handler for session creation using the secret key, mounts the iframe via PravaSDK.collectPAN in a client component, polls payment-result from the server with session_id + Bearer secret key.",
       "files": [],
       "expectations": [
@@ -18,7 +18,7 @@
     },
     {
       "id": 2,
-      "prompt": "Add Prava to my Express server. My keys are pk_test_xyz, sk_test_abc, backend https://api.prava.space.",
+      "prompt": "Add Prava to my Express server. My keys are pk_test_xyz, sk_test_abc, backend https://sandbox.api.prava.space.",
       "expected_output": "Plan installs SDK, uses non-NEXT_PUBLIC env var names appropriate for Express, creates POST /v1/sessions and GET payment-result routes server-side, returns session_token + iframe_url to the frontend.",
       "files": [],
       "expectations": [

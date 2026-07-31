@@ -54,14 +54,17 @@ const response = await fetch(`${process.env.BACKEND_URL}/v1/sessions`, {
     description: 'AI-assisted purchase',
     purchase_context: [{
       merchant_details: {
-        name: 'My AI App',
-        url: 'https://myaiapp.com',
+        // The DESTINATION merchant — the business the user is buying from,
+        // NOT your AI app. The name renders as the checkout page header and
+        // is forwarded to the card network as the merchant of record.
+        name: 'PackRight Supplies',
+        url: 'https://packright-supplies.com',
         country_code_iso2: 'US',
-        category_code: '5734',          // Optional: MCC code
-        category: 'Software Services',  // Optional: human-readable
+        category_code: '5943',          // Optional: MCC code
+        category: 'Office Supplies',    // Optional: human-readable
       },
       product_details: [{
-        description: 'Premium Plan — Monthly',
+        description: 'Packing tape — 3 pack',
         unit_price: '49.99',
         quantity: 1,
       }],
@@ -73,6 +76,8 @@ const response = await fetch(`${process.env.BACKEND_URL}/v1/sessions`, {
 const session = await response.json();
 // session → { session_id, session_token, iframe_url, order_id, expires_at }
 ```
+
+> **`merchant_details` is the destination merchant** — where the user's money is going — not the app doing the integrating. If your AI agent buys office supplies for the user, the supplier goes here, and that's the name the user sees on the checkout page.
 
 | Response Field | Description |
 |---|---|
@@ -153,7 +158,13 @@ Your Frontend ────▶ Opens iframe (embed or new tab)
                   Card tokenized with Visa
                   Stored in PCI-compliant vault
                         │
-                  User registers a passkey
+                  Device binding (first time on this
+                  browser/device): the card issuer
+                  sends an SMS/email OTP —
+                  user enters the one-time code
+                        │
+                  User registers a passkey on the
+                  card network's hosted page
                   (Face ID / Touch ID / fingerprint)
                         │
                   ✅ Payment processed!
@@ -161,6 +172,8 @@ Your Frontend ────▶ Opens iframe (embed or new tab)
 ```
 
 Your app **never** sees raw card data — it stays entirely within Prava's PCI-compliant iframe.
+
+> **The first run takes ~2–3 minutes — budget for it.** On a browser/device that hasn't been used with this card before, Prava **binds the device**: the card issuer sends a one-time code (the same 3-D Secure-style step-up your bank does), and only after the OTP validates does passkey registration happen — on the **card network's own hosted page**, not a page you or Prava render. That hand-off is deliberate: the user authenticates with the network directly. **In sandbox, the test OTP is `456789`.** Repeat purchases on the same browser skip the OTP entirely — one biometric prompt.
 
 ---
 
@@ -247,6 +260,8 @@ async function pollForCredential(sessionId: string): Promise<any> {
 
 ### Full payment-result response
 
+Credentials live on the **line items**, not on the transaction itself:
+
 ```json
 {
   "session_id": "sess_01KKW...",
@@ -256,14 +271,61 @@ async function pollForCredential(sessionId: string): Promise<any> {
     {
       "txn_id": "txn_01KKW...",
       "status": "completed",
-      "token": "4323126882557932",
-      "dynamic_cvv": "957",
-      "expiry_month": "12",
-      "expiry_year": "2027"
+      "line_items": [
+        {
+          "txn_ref_id": "tli_01KKW...",
+          "merchant_name": "PackRight Supplies",
+          "merchant_url": "https://packright-supplies.com",
+          "total_amount": "49.99",
+          "status": "completed",
+          "token": "4323126882557932",
+          "dynamic_cvv": "957",
+          "expiry_month": "12",
+          "expiry_year": "2027",
+          "products": [
+            {
+              "product_ref_id": "ref_01KKW...",
+              "external_product_id": null,
+              "name": "Packing tape — 3 pack",
+              "unit_price": "49.99",
+              "quantity": 1
+            }
+          ]
+        }
+      ]
     }
   ]
 }
 ```
+
+> Keep `line_items[].txn_ref_id` — you need it for the next step.
+
+---
+
+## 8. Report the Outcome (Required)
+
+After your agent charges the credential, you **must** report the result back so Prava can confirm the transaction with the card network. Unreported checkouts stay stuck in `awaiting_result`.
+
+```typescript
+// Server-side: report APPROVED or DECLINED after processing
+await fetch(
+  `${process.env.BACKEND_URL}/v1/sessions/${sessionId}/report-status`,
+  {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${process.env.MERCHANT_SECRET_KEY}`,
+    },
+    body: JSON.stringify({
+      txn_ref_id: lineItem.txn_ref_id,  // from payment-result → line_items[]
+      txn_status: 'APPROVED',           // or 'DECLINED'
+      authorization_code: 'AUTH123',    // optional: from your processor
+    }),
+  }
+);
+```
+
+Report **every** outcome — including `DECLINED`. Full schema: [Session API Reference](prava-sdk-integration/references/session-api-reference.md).
 
 ---
 
@@ -295,7 +357,10 @@ async function pollForCredential(sessionId: string): Promise<any> {
 │  First time:                       │
 │    4a. User enters card details    │
 │    4b. Card tokenized via Visa     │
-│    4c. User registers passkey      │
+│    4c. Device binding — issuer OTP │
+│        (sandbox test code 456789)  │
+│    4d. Registers passkey on card   │
+│        network's hosted page       │
 │                                    │
 │  Repeat:                           │
 │    4a. User picks saved card       │
@@ -318,6 +383,10 @@ async function pollForCredential(sessionId: string): Promise<any> {
 │                                    │
 │  7. AI agent uses credential to    │
 │     transact on user's behalf      │
+│         │                          │
+│  8. POST /v1/sessions/{id}/        │
+│     report-status (required)       │
+│     APPROVED / DECLINED            │
 │                                    │
 └────────────────────────────────────┘
 ```
@@ -328,11 +397,12 @@ async function pollForCredential(sessionId: string): Promise<any> {
 
 | Item | Value |
 |---|---|
-| **Backend URL** | `https://api.prava.space` |
+| **Backend URL** | `https://sandbox.api.prava.space` |
 | **Secret Key** | Starts with `sk_test_` |
 | **Publishable Key** | Starts with `pk_test_` |
 | **Test Cards** | Provided by the Prava team during onboarding |
-| **Health Check** | `curl https://api.prava.space/health` |
+| **Test OTP (device binding)** | `456789` — the one-time code for the first-run OTP screen |
+| **Health Check** | `curl https://sandbox.api.prava.space/health` |
 
 > Passkeys require a browser with **WebAuthn support** (Chrome 80+, Safari 14+, Firefox 80+, Edge 80+) and biometric hardware (Face ID, Touch ID, or fingerprint reader).
 
@@ -346,6 +416,8 @@ async function pollForCredential(sessionId: string): Promise<any> {
 | Iframe not loading | Verify `iframe_url` from session response; check browser console for errors |
 | Passkey prompt missing | Ensure HTTPS (or localhost) + supported browser + biometric hardware |
 | Session expired | Sessions last ~15 min. Create a fresh one |
+| "Authentication Failed" on the checkout page | Usually an expired session (15-min TTL), not an auth problem — create a fresh session before debugging keys or passkeys |
+| Unexpected OTP screen | First purchase from a new browser/device triggers device binding — in sandbox, enter `456789` |
 | `publishableKey must start with "pk_"` | You're accidentally using the secret key on the frontend |
 | Polling returns `pending` forever | Ensure you're polling with `session_id` (not `session_token`) and using the secret key |
 

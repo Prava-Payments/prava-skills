@@ -7,8 +7,10 @@ Use this data when testing in the **sandbox** environment.
 ## Sandbox Backend URL
 
 ```
-https://api.prava.space
+https://sandbox.api.prava.space
 ```
+
+> Production is `https://api.prava.space` — `sk_test_` keys only work against the sandbox URL.
 
 ---
 
@@ -23,6 +25,18 @@ Once you have your test card, the details will follow this format:
 | Card Number | 16-digit card number provided by Prava |
 | Expiry Date | Future date (e.g., `12/28`) |
 | CVV | 3-digit code provided with the test card |
+
+---
+
+## Test OTP (Device Binding)
+
+The **first** purchase from a new browser/device triggers device binding: the card issuer sends a one-time code before passkey registration.
+
+```
+456789
+```
+
+Enter this code on the OTP screen with any test card. Real codes only exist in production. Repeat purchases on the same browser skip the OTP.
 
 ---
 
@@ -47,7 +61,7 @@ Once you have your test card, the details will follow this format:
 Quick test with cURL:
 
 ```bash
-curl -X POST https://api.prava.space/v1/sessions \
+curl -X POST https://sandbox.api.prava.space/v1/sessions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_SK_TEST_KEY" \
   -d '{
@@ -98,7 +112,7 @@ Expected response:
 Verify the sandbox backend is online:
 
 ```bash
-curl https://api.prava.space/health
+curl https://sandbox.api.prava.space/health
 ```
 
 Expected:
@@ -142,3 +156,5 @@ You can use any string as `user_id`. Some suggestions:
 | Passkey prompt doesn't appear | Ensure you're on HTTPS (or localhost) and using a supported browser |
 | Card validation fails | Use the exact test card provided by the Prava team. Reach out to your Prava account manager if you don't have one |
 | "Session expired" error | Sessions last ~15 mins. Create a fresh session |
+| "Authentication Failed" on the checkout page | Usually an expired session, not an auth problem — create a fresh session |
+| OTP screen appears | Device binding on a new browser/device — enter the sandbox test code `456789` |

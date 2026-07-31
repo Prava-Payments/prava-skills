@@ -14,7 +14,8 @@
 
 // ── Configuration ─────────────────────────────────────────
 // These come from your .env.local file
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.prava.space';
+// Falls back to sandbox — set NEXT_PUBLIC_BACKEND_URL=https://api.prava.space for production
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://sandbox.api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 // ── Types ──────────────────────────────────────────────────
@@ -133,11 +134,13 @@ export async function createPravaSession({
       purchase_context: purchaseContext || [
         {
           merchant_details: {
-            name: 'My AI App',                  // ← Replace with your app name
-            url: 'https://myapp.com',           // ← Replace with your URL
-            country_code_iso2: 'US',            // ← Replace with your country
-            category_code: '5734',
-            category: 'Software Services',
+            // The DESTINATION merchant — the real store the user is buying from, NOT your app.
+            // Example uses a real merchant; replace with the actual merchant of this purchase.
+            name: 'Zara',                       // ← Real merchant the user buys from (e.g. Zara)
+            url: 'https://www.zara.com',        // ← That merchant's real URL
+            country_code_iso2: 'US',            // ← That merchant's country
+            category_code: '5651',              // ← Optional: that merchant's MCC (5651 = apparel)
+            category: 'Apparel',                // ← Optional: human-readable category
           },
           product_details: [
             {
@@ -170,6 +173,10 @@ export async function createPravaSession({
  *   const result = await pollPaymentResult(session.session_id);
  *   // result.transactions[0].line_items[0].token → Visa network token
  *   // result.transactions[0].line_items[0].dynamic_cvv → one-time CVV
+ *
+ * After charging the credential, report the outcome (required — APPROVED or DECLINED):
+ *   POST ${BACKEND_URL}/v1/sessions/{session_id}/report-status
+ *   Body: { txn_ref_id: lineItem.txn_ref_id, txn_status: 'APPROVED' }
  */
 export async function pollPaymentResult(sessionId: string): Promise<PaymentResultResponse> {
   if (!MERCHANT_SECRET_KEY) {

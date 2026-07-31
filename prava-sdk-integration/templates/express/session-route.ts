@@ -23,7 +23,8 @@ import { Router, Request, Response } from 'express';
 const router = Router();
 
 // ── Configuration ─────────────────────────────────────────
-const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://api.prava.space';
+// Falls back to sandbox — set PRAVA_BACKEND_URL=https://api.prava.space for production
+const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://sandbox.api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 // ── Types ──────────────────────────────────────────────────
@@ -84,11 +85,13 @@ router.post('/create-session', async (req: Request, res: Response) => {
         purchase_context: [
           {
             merchant_details: {
-              name: 'My AI App',                  // ← Replace with your app name
-              url: 'https://myapp.com',           // ← Replace with your URL
-              country_code_iso2: 'US',            // ← Replace with your country
-              category_code: '5734',
-              category: 'Software Services',
+              // The DESTINATION merchant — the real store the user is buying from, NOT your app.
+              // Example uses a real merchant; replace with the actual merchant of this purchase.
+              name: 'Zara',                       // ← Real merchant the user buys from (e.g. Zara)
+              url: 'https://www.zara.com',        // ← That merchant's real URL
+              country_code_iso2: 'US',            // ← That merchant's country
+              category_code: '5651',              // ← Optional: that merchant's MCC (5651 = apparel)
+              category: 'Apparel',                // ← Optional: human-readable category
             },
             product_details: [
               {
@@ -128,7 +131,12 @@ router.post('/create-session', async (req: Request, res: Response) => {
  *
  * Polls for the payment result after the user completes the card flow.
  * Uses session_id (from create-session response) and the secret key.
- * Returns the network token + dynamic CVV when status is "completed".
+ * Returns the network token + dynamic CVV when status is "completed"
+ * (on transactions[].line_items[] — not on the transaction itself).
+ *
+ * After charging the credential, report the outcome (required — APPROVED or DECLINED):
+ *   POST ${BACKEND_URL}/v1/sessions/{sessionId}/report-status
+ *   Body: { txn_ref_id: lineItem.txn_ref_id, txn_status: 'APPROVED' }
  */
 router.get('/payment-result/:sessionId', async (req: Request, res: Response) => {
   try {

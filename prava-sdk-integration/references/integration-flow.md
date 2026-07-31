@@ -31,7 +31,9 @@ Prava is a payment stack for AI agents. It enables AI apps to process card payme
 │  │                                                │        │
 │  │  • Card number, expiry, CVV input             │        │
 │  │  • Tokenization with Visa                     │        │
+│  │  • Device binding: issuer OTP (first time)    │        │
 │  │  • Passkey registration / verification         │        │
+│  │    (on the card network's hosted page)        │        │
 │  │  • Your app NEVER sees raw card data          │        │
 │  └──────────────────────────────────────────────┘        │
 │         │                                                 │
@@ -77,14 +79,19 @@ Step 4: Prava Backend (transparent to AI app)
 ├── Card data sent to PCI vault (Skyflow)
 ├── Card tokenized with Visa network
 ├── Enrolled for VIC (Visa Intelligent Commerce)
-└── Passkey registration initiated
+└── Device binding initiated (first time on this browser/device)
 
-Step 5: End User (passkey)
+Step 5: End User (issuer OTP — first time on this browser/device only)
+├── Card issuer sends a one-time code (SMS/email), 3-D Secure style
+├── User enters the code (sandbox test code: 456789)
+└── Skipped entirely on repeat purchases from the same browser
+
+Step 6: End User (passkey — on the card network's hosted page)
 ├── Browser prompts for biometric (Face ID / Touch ID / fingerprint)
 ├── User approves passkey registration
 └── Passkey stored for future verifications
 
-Step 6: Completion
+Step 7: Completion
 ├── If buy flow:
 │   ├── Payment is processed
 │   └── AI App receives payment success
@@ -169,19 +176,26 @@ Step 2: Your Server polls for result
 
 Step 3: Status transitions
 ├── "pending"   → Keep polling (payment still processing)
-├── "completed" → Credential ready! Extract from transactions[0]
+├── "completed" → Credential ready! Extract from transactions[0].line_items[0]
 └── "failed"    → Error occurred, check transactions[0].error
 
 Step 4: Extract credential (when status === "completed")
+├── Credentials live on transactions[0].line_items[0] — NOT on the transaction:
 ├── token         → Visa network token (16 digits, NOT user's real card)
 ├── dynamic_cvv   → One-time CVV (3 digits, changes per transaction)
 ├── expiry_month  → "12" (2-digit MM)
-└── expiry_year   → "2027" (4-digit YYYY)
+├── expiry_year   → "2027" (4-digit YYYY)
+└── txn_ref_id    → keep this — needed to report the outcome
 
 Step 5: AI agent uses credential
 ├── Network token can be used like a card number
 ├── Dynamic CVV is the security code
-└── Agent transacts on user's behalf at any merchant
+└── Agent transacts on the user's behalf at the merchant pinned in the session
+
+Step 6: Report the outcome (required)
+├── POST /v1/sessions/{session_id}/report-status
+├── Body: { txn_ref_id, txn_status: "APPROVED" | "DECLINED" }
+└── Skipping this leaves the transaction stuck in "awaiting_result"
 ```
 
 ### Key Data
@@ -190,7 +204,8 @@ Step 5: AI agent uses credential
 |------|-----|------|
 | Poll request | Your server → Prava | `session_id` in URL, `MERCHANT_SECRET_KEY` in Bearer header |
 | Poll response (pending) | Prava → Your server | `{ status: "pending", transactions: [] }` |
-| Poll response (completed) | Prava → Your server | `{ status: "completed", transactions: [{ token, dynamic_cvv, expiry_month, expiry_year }] }` |
+| Poll response (completed) | Prava → Your server | `{ status: "completed", transactions: [{ line_items: [{ txn_ref_id, token, dynamic_cvv, expiry_month, expiry_year }] }] }` |
+| Report outcome | Your server → Prava | `POST /v1/sessions/{session_id}/report-status` with `{ txn_ref_id, txn_status }` — required, incl. `DECLINED` |
 | Poll response (failed) | Prava → Your server | `{ status: "failed", transactions: [{ error: { code, message } }] }` |
 
 ### Common Mistakes

@@ -66,7 +66,12 @@ Your Frontend ────▶ Opens iframe (embed or new tab)
                   Card tokenized with Visa
                   Stored in PCI-compliant vault
                         │
-                  User registers a passkey (Face ID / Touch ID / fingerprint)
+                  Device binding (first time on this browser/device):
+                  card issuer sends an SMS/email OTP → user enters the code
+                  (sandbox test code: 456789)
+                        │
+                  User registers a passkey on the card network's hosted page
+                  (Face ID / Touch ID / fingerprint)
                         │
                   ✅ Payment processed → one-time credential generated
                         │
@@ -77,7 +82,13 @@ Your Server ──GET /v1/sessions/{id}/payment-result──▶ Prava API
               expiry_month, expiry_year
                   │
               AI agent uses credential to transact
+                  │
+Your Server ──POST /v1/sessions/{id}/report-status──▶ Prava API
+              (required: APPROVED or DECLINED)
 ```
+
+> **First run takes ~2–3 minutes** because of device binding (OTP → passkey registration on the
+> card network's hosted page). Repeat purchases on the same browser skip the OTP — one biometric prompt.
 
 ### Repeat Flow
 ```
@@ -104,13 +115,15 @@ Before starting integration, you MUST collect these from the user:
 |-------|--------|---------|
 | **Publishable Key** | `pk_test_xxx` or `pk_live_xxx` | `pk_test_TaFAJcKaldaFoXErIEHw03p_7lAhXY94D3RsXgLV_3s` |
 | **Secret Key** | `sk_test_xxx` or `sk_live_xxx` | `sk_test_zGzBj2QzZVaFtO4dkY2ZLAGe7wRSf1zgzUPBheBksA4` |
-| **Backend URL** | Full URL | `https://api.prava.space` |
+| **Backend URL** | Full URL | `https://sandbox.api.prava.space` (sandbox) / `https://api.prava.space` (production) |
+
+**Match the URL to the key environment:** `sk_test_`/`pk_test_` keys only work against `sandbox.api.prava.space`; `sk_live_`/`pk_live_` keys only work against `api.prava.space`. Test keys pointed at the production URL fail with `401` — or worse, live keys pointed at sandbox silently test nothing.
 
 If the user hasn't provided these, ask:
 > "To integrate Prava, I need three things from you:
 > 1. Your **Publishable Key** (starts with `pk_test_` or `pk_live_`)
 > 2. Your **Secret Key** (starts with `sk_test_` or `sk_live_`)
-> 3. Your **Prava Backend URL** (e.g., `https://api.prava.space`)
+> 3. Your **Prava Backend URL** (`https://sandbox.api.prava.space` for sandbox, `https://api.prava.space` for production)
 >
 > You should have received these when your account was created."
 
@@ -140,17 +153,19 @@ Create a `.env` or `.env.local` file (depending on framework):
 
 **Next.js** (`.env.local`):
 ```env
-NEXT_PUBLIC_BACKEND_URL=https://api.prava.space
+NEXT_PUBLIC_BACKEND_URL=https://sandbox.api.prava.space
 MERCHANT_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 NEXT_PUBLIC_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 ```
 
 **Express** (`.env`):
 ```env
-PRAVA_BACKEND_URL=https://api.prava.space
+PRAVA_BACKEND_URL=https://sandbox.api.prava.space
 MERCHANT_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 PRAVA_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 ```
+
+> Sandbox URL shown, matching the `sk_test_`/`pk_test_` keys. For production, switch to `https://api.prava.space` **and** `sk_live_`/`pk_live_` keys together.
 
 **Other frameworks** — use the appropriate env prefix (`VITE_`, `REACT_APP_`, etc.) for client-side variables.
 
@@ -223,9 +238,33 @@ const data = await res.json();
 > - The `dynamic_cvv` is **single-use** and changes every transaction
 > - Add `?_t=${Date.now()}` cache-buster to prevent stale responses in Next.js
 
-### Step 7: Provide Test Data
+### Step 7: Report the Outcome (Server-Side, Required)
+
+After your agent charges the credential, report the result back so Prava can confirm the transaction with the card network. **Skipping this leaves every transaction stuck in `awaiting_result`.**
+
+```typescript
+// Server-side: POST /v1/sessions/{session_id}/report-status
+// Auth: Bearer {MERCHANT_SECRET_KEY}
+await fetch(`${BACKEND_URL}/v1/sessions/${session_id}/report-status`, {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${MERCHANT_SECRET_KEY}`,
+  },
+  body: JSON.stringify({
+    txn_ref_id: lineItem.txn_ref_id,  // from payment-result → transactions[0].line_items[]
+    txn_status: 'APPROVED',           // or 'DECLINED'
+  }),
+});
+```
+
+Report **every** outcome, including `DECLINED`. See `references/session-api-reference.md` for the full schema (`authorization_code`, `product_statuses`, etc.).
+
+### Step 8: Provide Test Data
 
 **Network test cards are provided by the Prava team.** Reach out to your Prava account manager during onboarding to receive sandbox test card details. Once received, the test card will include a 16-digit card number, a future expiry date (e.g., `12/28`), and a 3-digit CVV.
+
+**Sandbox test OTP:** the first purchase from a new browser/device shows a one-time-code screen (device binding). In sandbox, the code is **`456789`**.
 
 ---
 
@@ -275,7 +314,8 @@ These are common pitfalls discovered during integration. Address them proactivel
 ```typescript
 'use server';
 
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://api.prava.space';
+// Falls back to sandbox — set NEXT_PUBLIC_BACKEND_URL=https://api.prava.space for production
+const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://sandbox.api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 export interface SessionResponse {
@@ -368,11 +408,13 @@ export async function createPravaSession({
       ...(callbackUrl && { callback_url: callbackUrl }),
       purchase_context: purchaseContext || [{
         merchant_details: {
-          name: 'My AI App',                  // ← Replace with your app name
-          url: 'https://myapp.com',           // ← Replace with your URL
+          // The DESTINATION merchant — the real store the user is buying from, NOT your app.
+          // Example uses a real merchant; replace with the actual merchant of this purchase.
+          name: 'Zara',                       // ← Real merchant the user buys from (e.g. Zara)
+          url: 'https://www.zara.com',        // ← That merchant's real URL
           country_code_iso2: 'US',            // ← Replace with your country
-          category_code: '5734',
-          category: 'Software Services',
+          category_code: '5651',              // ← Optional: that merchant's MCC (5651 = apparel)
+          category: 'Apparel',                // ← Optional: human-readable category
         },
         product_details: [{
           description: 'Purchase',
@@ -673,7 +715,8 @@ export default function CheckoutPage() {
 import { Router, Request, Response } from 'express';
 
 const router = Router();
-const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://api.prava.space';
+// Falls back to sandbox — set PRAVA_BACKEND_URL=https://api.prava.space for production
+const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://sandbox.api.prava.space';
 const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
 
 // POST /api/prava/create-session
@@ -702,11 +745,12 @@ router.post('/create-session', async (req: Request, res: Response) => {
         description: description || 'Purchase',
         purchase_context: [{
           merchant_details: {
-            name: 'My AI App',                  // ← Replace
-            url: 'https://myapp.com',           // ← Replace
+            // The DESTINATION merchant — the real store the user is buying from, NOT your app
+            name: 'Zara',                       // ← Real merchant the user buys from (e.g. Zara)
+            url: 'https://www.zara.com',        // ← That merchant's real URL
             country_code_iso2: 'US',            // ← Replace
-            category_code: '5734',
-            category: 'Software Services',
+            category_code: '5651',              // ← Optional: that merchant's MCC (5651 = apparel)
+            category: 'Apparel',                // ← Optional: human-readable category
           },
           product_details: [{ description: description || 'Purchase', unit_price: totalAmount, quantity: 1 }],
           effective_until_minutes: 15,
@@ -787,7 +831,7 @@ export default router;
 
     // In production, session creation MUST happen on your server.
     const PUBLISHABLE_KEY = 'pk_test_YOUR_KEY';
-    const BACKEND_URL = 'https://api.prava.space';
+    const BACKEND_URL = 'https://sandbox.api.prava.space'; // production: https://api.prava.space
     const SECRET_KEY = 'sk_test_YOUR_KEY'; // Server-side only in production!
 
     let sdk = null;
@@ -810,7 +854,8 @@ export default router;
             user_id: 'demo_user', user_email: 'demo@example.com',
             total_amount: '49.99', currency: 'USD', description: 'Demo checkout',
             purchase_context: [{
-              merchant_details: { name: 'Demo Store', url: 'https://example.com', country_code_iso2: 'US' },
+              // Destination merchant — the real store the user buys from, NOT your app
+              merchant_details: { name: 'Zara', url: 'https://www.zara.com', country_code_iso2: 'US' },
               product_details: [{ description: 'Test Product', unit_price: '49.99', quantity: 1 }],
             }],
           }),
@@ -851,12 +896,13 @@ export default router;
 
 | Item | Value |
 |------|-------|
-| **Sandbox Backend** | `https://api.prava.space` |
+| **Sandbox Backend** | `https://sandbox.api.prava.space` |
 | **Production Backend** | `https://api.prava.space` |
 | **Secret Key format** | `sk_test_xxx` (sandbox) / `sk_live_xxx` (production) |
 | **Publishable Key format** | `pk_test_xxx` (sandbox) / `pk_live_xxx` (production) |
 | **Test Cards** | Provided by Prava team during onboarding |
-| **Health Check** | `curl https://api.prava.space/health` |
+| **Test OTP (device binding)** | `456789` — sandbox one-time code for the first-run OTP screen |
+| **Health Check** | `curl https://sandbox.api.prava.space/health` |
 | **Passkey requirements** | HTTPS (or localhost) + WebAuthn browser (Chrome 80+, Safari 14+, Firefox 80+, Edge 80+) + biometric hardware |
 
 **Supported currencies:** Any valid ISO 4217 3-letter code — `USD`, `EUR`, `GBP`, `INR`, `CAD`, `AUD`, `JPY`, etc.
@@ -906,6 +952,8 @@ All errors return JSON with an error object and appropriate HTTP status.
 | Iframe not loading | Verify `iframe_url` from session response; check browser console |
 | `MERCHANT_SECRET_KEY not configured` | Add to `.env.local` (Next.js) or `.env` — server-side only |
 | Session expired | Sessions last ~15 min. Create a new one |
+| "Authentication Failed" on the checkout page | Usually an expired session (15-min TTL), not an auth problem — create a fresh session before debugging keys or passkeys |
+| Unexpected OTP screen during card entry | Device binding on a new browser/device — in sandbox, enter `456789` |
 | Passkey prompt missing | Ensure HTTPS (or localhost) + supported browser + biometric hardware |
 | Polling returns `pending` forever | Using `session_id` (not `session_token`) in URL? Using secret key (not session_token) as Bearer? |
 | Next.js stale polling responses | Add `?_t=${Date.now()}` + `cache: 'no-store'` + `next: { revalidate: 0 }` |
