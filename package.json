@@ -1,17 +1,21 @@
 {
   "name": "@prava-sdk/cli",
-  "version": "3.1.0",
+  "version": "3.2.0",
   "description": "Prava CLI — smart wallet for AI agents",
   "type": "module",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Prava-Payments/prava-skills.git"
+    "url": "git+https://github.com/Prava-Payments/prava-skills.git"
   },
   "homepage": "https://prava.space",
   "author": "Prava Payments",
   "bin": {
-    "prava": "./dist/index.js"
+    "prava": "dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public",
+    "tag": "latest"
   },
   "files": [
     "dist",
@@ -28,7 +32,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm test && npm run typecheck && npm run build",
     "eval:pay": "tsx prava-pay/evals/run.ts",
     "eval:pay:about": "tsx prava-pay/evals/about-run.ts",
     "eval:sdk": "tsx prava-sdk-integration/evals/run.ts",

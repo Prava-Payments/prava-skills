@@ -1,7 +1,7 @@
 /**
  * prava mandate — Authorize a card once (passkey), then charge it later within caps.
  *
- * All mandate endpoints live on the CORE API (not the wallet): `POST /v1/sessions` with
+ * All mandate endpoints live on the CORE API (not the wallet): `POST /v1/sessions/agent` with
  * `mandate_setup` for create; `GET /v1/mandates` for list/poll; `POST /v1/mandates/:id/{charge,
  * charges/:txn/report,cancel}`. The skill (not this file) drives UX — offer vs. autonomous,
  * which mandate matches, and never surfacing raw ids to the user.
@@ -112,7 +112,7 @@ export async function mandateCreateCommand(opts: {
   }
 
   const products = (opts.product ?? []).map((p) => JSON.parse(p) as Record<string, unknown>);
-  const product_details = products.length ? products : [{
+  const productDetails = products.length ? products : [{
     description: scope === 'any' ? 'Standing mandate budget' : `${merchant.name} purchase`,
     unit_price: opts.amount,
     quantity: 1,
@@ -126,11 +126,14 @@ export async function mandateCreateCommand(opts: {
 
   const res = await mandateRequest<any>(mandateClient(), {
     method: 'POST',
-    path: '/v1/sessions',
+    path: '/v1/sessions/agent',
     body: {
       total_amount: opts.amount,
       currency: opts.currency.toUpperCase(),
-      purchase_context: [{ merchant_details: merchant, product_details }],
+      merchant_name: merchant.name,
+      merchant_url: merchant.url,
+      merchant_country: merchant.country_code_iso2,
+      products: productDetails,
       mandate_setup: {
         intent: 'mandate_setup',
         recurring_frequency: frequency,
@@ -148,12 +151,12 @@ export async function mandateCreateCommand(opts: {
     if (res.status >= 400) process.exit(1);
     return;
   }
-  if (res.status >= 400 || !d.iframe_url) {
+  if (res.status >= 400 || !d.payment_url) {
     console.error(`\n✗ Could not start mandate setup: ${d?.error?.message ?? JSON.stringify(d)}`);
     process.exit(1);
   }
   console.log(`\nMandate setup started. Ask the user to approve with their passkey:`);
-  console.log(`  ${d.iframe_url}`);
+  console.log(`  ${d.payment_url}`);
   console.log(`\nOne-time mandates are valid up to 7 days. After the user approves, run:`);
   console.log(`  prava mandate poll${scope === 'any' ? '' : ` --merchant ${merchant.url}`} --amount ${opts.amount}`);
 }

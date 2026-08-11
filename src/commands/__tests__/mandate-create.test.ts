@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const captured = vi.hoisted(() => ({ req: null as any, response: null as any }));
-const DEFAULT_RESPONSE = { status: 201, data: { session_id: 'sess_1', order_id: 'ord_1', iframe_url: 'https://collect.prava.space/s/sess_1' }, headers: {} };
+const DEFAULT_RESPONSE = { status: 201, data: { session_id: 'sess_1', payment_url: 'https://collect.prava.space/s/sess_1', expires_at: '2026-08-11T12:00:00.000Z' }, headers: {} };
 vi.mock('../../http/client.js', () => ({
   PravaClient: class {
     async request(opts: any) {
@@ -50,11 +50,20 @@ describe('mandateCreateCommand', () => {
       amount: '120.00', currency: 'usd', frequency: 'one_time', scope: 'listed', yes: true,
     });
     expect(captured.req.method).toBe('POST');
-    expect(captured.req.path).toBe('/v1/sessions');
-    expect(captured.req.body.total_amount).toBe('120.00');
-    expect(captured.req.body.currency).toBe('USD');
-    expect(captured.req.body.purchase_context[0].merchant_details).toEqual({ name: 'Nike', url: 'https://nike.com', country_code_iso2: 'US' });
-    expect(captured.req.body.mandate_setup).toMatchObject({ intent: 'mandate_setup', recurring_frequency: 'one_time', merchant_scope: 'listed' });
+    expect(captured.req.path).toBe('/v1/sessions/agent');
+    expect(captured.req.body).toEqual({
+      total_amount: '120.00',
+      currency: 'USD',
+      merchant_name: 'Nike',
+      merchant_url: 'https://nike.com',
+      merchant_country: 'US',
+      products: [{ description: 'Nike purchase', unit_price: '120.00', quantity: 1 }],
+      mandate_setup: {
+        intent: 'mandate_setup',
+        recurring_frequency: 'one_time',
+        merchant_scope: 'listed',
+      },
+    });
     expect(captured.req.agentId).toBe('aa_1');
     expect(logs.some((l) => l.includes('collect.prava.space/s/sess_1'))).toBe(true);
   });
@@ -63,8 +72,10 @@ describe('mandateCreateCommand', () => {
     const { mandateCreateCommand } = await import('../mandate');
     await mandateCreateCommand({ amount: '200.00', currency: 'USD', frequency: 'one_time', scope: 'any', yes: true });
     expect(captured.req.body.mandate_setup.merchant_scope).toBe('any');
-    expect(captured.req.body.purchase_context[0].merchant_details.name).toBe('Any merchant');
-    expect(captured.req.body.purchase_context[0].product_details[0].unit_price).toBe('200.00');
+    expect(captured.req.body.merchant_name).toBe('Any merchant');
+    expect(captured.req.body.merchant_url).toBe('https://prava.space');
+    expect(captured.req.body.merchant_country).toBe('US');
+    expect(captured.req.body.products[0].unit_price).toBe('200.00');
   });
 
   it('--json still prints the body but exits 1 on a res.status >= 400 response', async () => {
