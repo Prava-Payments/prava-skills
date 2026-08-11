@@ -87,6 +87,77 @@ export interface MandateRow {
   createdAt: string;
 }
 
+export interface MandatePollCriteria {
+  scope: string;
+  merchant?: string;
+  amount: string;
+  currency: string;
+}
+
+function canonicalAmount(value: string | null): string | null {
+  if (value == null) return null;
+  const match = value.trim().match(/^(\d+)(?:\.(\d{1,2}))?$/);
+  if (!match) return null;
+  const whole = BigInt(match[1]!).toString();
+  const fraction = (match[2] ?? '').padEnd(2, '0');
+  return `${whole}.${fraction}`;
+}
+
+function normalizeExactMerchantName(value: string): string {
+  return value.normalize('NFKC').trim().replace(/\s+/gu, ' ').toLowerCase();
+}
+
+function isUrlLike(value: string): boolean {
+  return /^[a-z][a-z0-9+.-]*:\/\//i.test(value.trim());
+}
+
+export function mandatePollCriteriaProblem(criteria: MandatePollCriteria): string | null {
+  const scope = criteria.scope.toLowerCase();
+  if (scope !== 'listed' && scope !== 'any') return '--scope must be either listed or any.';
+  if (!canonicalAmount(criteria.amount)) return '--amount must be a non-negative amount with at most two decimal places.';
+  if (!/^[a-z]{3}$/i.test(criteria.currency.trim())) return '--currency must be a three-letter ISO 4217 code.';
+  if (scope === 'listed' && !criteria.merchant?.trim()) {
+    return '--merchant is required for --scope listed and must identify the exact merchant used at creation.';
+  }
+  if (scope === 'listed' && isUrlLike(criteria.merchant ?? '')) {
+    return '--merchant must be the exact merchant name used at creation, not a URL.';
+  }
+  if (scope === 'any' && criteria.merchant?.trim()) {
+    return '--merchant must be omitted for --scope any.';
+  }
+  return null;
+}
+
+export function mandateMatchesPoll(row: MandateRow, criteria: MandatePollCriteria): boolean {
+  const scope = criteria.scope.toLowerCase();
+  if (row.status !== 'active' || row.state !== 'available') return false;
+  if (row.merchantScope !== scope) return false;
+  if (canonicalAmount(row.approvedAmount) !== canonicalAmount(criteria.amount)) return false;
+  if ((row.currency ?? '').toUpperCase() !== criteria.currency.trim().toUpperCase()) return false;
+  if (scope === 'any') return !criteria.merchant?.trim();
+
+  if (isUrlLike(criteria.merchant ?? '')) return false;
+  const expectedMerchant = normalizeExactMerchantName(criteria.merchant ?? '');
+  const actualMerchant = normalizeExactMerchantName(row.merchantName ?? '');
+  return expectedMerchant.length > 0 && actualMerchant === expectedMerchant;
+}
+
+/**
+ * Fail closed when multiple standing mandates satisfy the strict tuple. "Newest" is not proof that
+ * a mandate belongs to this setup session; exact session correlation is the durable follow-up.
+ */
+export function selectMandatePollMatch(
+  rows: MandateRow[],
+  criteria: MandatePollCriteria,
+): MandateRow | undefined {
+  const matches = rows.filter((row) => mandateMatchesPoll(row, criteria));
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function shellQuote(value: string): string {
+  return "'" + value.split("'").join("'\\''") + "'";
+}
+
 export async function mandateCreateCommand(opts: {
   merchantName?: string; merchantUrl?: string; merchantCountry?: string;
   amount: string; currency: string;
@@ -158,7 +229,10 @@ export async function mandateCreateCommand(opts: {
   console.log(`\nMandate setup started. Ask the user to approve with their passkey:`);
   console.log(`  ${d.payment_url}`);
   console.log(`\nOne-time mandates are valid up to 7 days. After the user approves, run:`);
-  console.log(`  prava mandate poll${scope === 'any' ? '' : ` --merchant ${merchant.url}`} --amount ${opts.amount}`);
+  const merchantArg = scope === 'any' ? '' : ` --merchant ${shellQuote(merchant.name)}`;
+  console.log(
+    `  prava mandate poll --scope ${scope}${merchantArg} --amount ${opts.amount} --currency ${opts.currency.toUpperCase()}`,
+  );
 }
 
 export async function mandateListCommand(opts: { merchant?: string; json?: boolean }): Promise<void> {
@@ -170,9 +244,7 @@ export async function mandateListCommand(opts: { merchant?: string; json?: boole
     console.error(`\n✗ Could not list mandates: ${res.data?.error?.message ?? JSON.stringify(res.data)}`);
     process.exit(1);
   }
-  // Same bidirectional match as `poll` (merchantMatches) — otherwise `list --merchant <url>` and
-  // `poll --merchant <url>` could disagree on the same mandate (create's own hint tells the user
-  // to pass the merchant URL, which is longer than a stored short merchantName).
+  // List keeps broad discovery semantics. Poll deliberately uses a separate fail-closed matcher.
   const mandates = (res.data?.mandates ?? []).filter((x) => merchantMatches(x, opts.merchant));
   if (opts.json) { console.log(JSON.stringify(mandates, null, 2)); return; }
   if (!mandates.length) { console.log('No mandates.'); return; }
@@ -192,14 +264,25 @@ function merchantMatches(row: MandateRow, filter?: string): boolean {
   return name.includes(f) || (f.includes(name) && name.length > 0);
 }
 
-export async function mandatePollCommand(opts: { merchant?: string; amount?: string; json?: boolean }): Promise<void> {
+export async function mandatePollCommand(opts: {
+  scope: string;
+  merchant?: string;
+  amount: string;
+  currency: string;
+  json?: boolean;
+}): Promise<void> {
+  const problem = mandatePollCriteriaProblem(opts);
+  if (problem) {
+    console.error(`Invalid mandate poll: ${problem}`);
+    process.exit(1);
+  }
   const { agentId, privateKey } = await requireAgent();
   const deadline = Date.now() + 10 * 60 * 1000;
   let delay = 3000;
-  // ponytail: newest-active-match heuristic — core has no session→mandate correlation (spec §7.2).
+  // Strict tuple matching is defense in depth. Exact setup-session correlation remains the durable fix.
   while (Date.now() < deadline) {
     const res = await mandateRequest<{ mandates?: MandateRow[]; error?: { message?: string } }>(mandateClient(), {
-      method: 'GET', path: '/v1/mandates', agentId, privateKey,
+      method: 'GET', path: '/v1/mandates?standing_only=true', agentId, privateKey,
     });
     if (res.status >= 400) {
       if (res.status < 500) {
@@ -213,11 +296,7 @@ export async function mandatePollCommand(opts: { merchant?: string; amount?: str
       delay = Math.min(Math.floor(delay * 1.5), 20000);
       continue;
     }
-    const match = (res.data?.mandates ?? [])
-      .filter((x) => x.status === 'active')
-      .filter((x) => merchantMatches(x, opts.merchant))
-      .filter((x) => !opts.amount || x.approvedAmount === opts.amount)
-      .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))[0];
+    const match = selectMandatePollMatch(res.data?.mandates ?? [], opts);
     if (match) {
       if (opts.json) { console.log(JSON.stringify(match, null, 2)); return; }
       const who = match.merchantScope === 'any' ? 'Any store' : (match.merchantName ?? 'Unknown');
