@@ -1,0 +1,12 @@
+interface:
+  display_name: "Chaat Corner Prava Checkout"
+  short_description: "LLM-guided Chaat Corner pickup with Prava card tokens"
+  default_prompt: "Use $prava-chaat-corner-skill to order from Chaat Corner's official Popmenu menu with browser-agent control: inspect live menu/cart/totals, keep pickup/no-tip preferences explicit, create a Prava USD authorization only after approval, use helpers only for constrained iframe input, and submit only after final visible-page verification."
+dependencies:
+  tools:
+    - type: "shell"
+      value: "prava"
+      description: "Prava CLI for agent-linked payment authorization and tokenized card credentials."
+    - type: "browser"
+      value: "native-browser-tools-or-chrome-cdp"
+      description: "A host browser/computer-use/playwright tool for LLM-controlled checkout, plus Chrome/Chromium DevTools Protocol as a constrained fallback for iframe input."
