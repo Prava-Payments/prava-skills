@@ -6,19 +6,20 @@
  * design system, layout, and component patterns.
  *
  * STATE MACHINE:
- *   idle → loading → (card-entry + polling) → completed | failed
+ *   idle → loading → (card-entry + polling) → awaiting-result → completed | failed
  *
  * CRITICAL LOGIC (do not change):
  *   - Session created ONCE in parent, shared by iframe + polling (prevents duplicate-session bug)
- *   - Polling uses session_id (not session_token) with MERCHANT_SECRET_KEY
+ *   - Browser polling uses session_id (not session_token); the authenticated
+ *     server action uses MERCHANT_SECRET_KEY and returns no payment credentials
  *   - Polling interval: 3s, with cleanup on unmount
  *   - For embed: PravaCardForm mounts iframe; for newtab: window.open(iframe_url)
  *
  * ADAPT:
  *   - All rendering → user's design system (components, styling, layout)
  *   - Where this lives → user's existing checkout page, settings page, or wherever it fits
- *   - User ID / email source → user's auth system (not hardcoded)
- *   - Amount / product info → user's cart, product context, or AI agent context
+ *   - Server auth adapter → user's authentication system
+ *   - checkoutRef resolution → trusted server-side cart/order service
  *
  * Place this in: wherever the checkout or card enrollment flow lives in the user's app
  */
@@ -26,8 +27,17 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import PravaCardForm from '@/components/PravaCardForm';
-import { createPravaSession, pollPaymentResult } from '@/app/actions';
-import type { SessionResponse, PaymentResultResponse, PaymentTransaction } from '@/app/actions';
+import {
+  createPravaSession,
+  pollPaymentStatus,
+  revokePravaSession,
+} from '@/app/actions';
+import type { SessionResponse, PaymentStatusResponse } from '@/app/actions';
+
+const POLL_INTERVAL_MS = 3000;
+const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+const MAX_POLL_ATTEMPTS = 300;
+const MAX_CONSECUTIVE_POLL_ERRORS = 3;
 
 // ── Flow State ─────────────────────────────────────────────
 // The checkout flow is a simple state machine:
@@ -36,56 +46,86 @@ import type { SessionResponse, PaymentResultResponse, PaymentTransaction } from 
 //   LOADING       → Session is being created on the server.
 //   CARD_ENTRY    → Session created. Iframe is mounted (embed) or opened (newtab).
 //                   Simultaneously polling for payment result.
-//   COMPLETED     → Payment succeeded. Credential (token + CVV) is available.
+//   AWAITING      → One-time credential is ready on the SERVER. The trusted
+//                   server-side payment worker must charge it and report status.
+//   COMPLETED     → The processor outcome was reported as APPROVED.
 //   FAILED        → Payment failed. Show error, allow retry.
 
 export default function CheckoutPage() {
   // ── State ──────────────────────────────────────────────────
   const [session, setSession] = useState<SessionResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [paymentResult, setPaymentResult] = useState<PaymentResultResponse | null>(null);
+  const [paymentStatus, setPaymentStatus] = useState<PaymentStatusResponse | null>(null);
+  const [integrationType, setIntegrationType] = useState<'embedding' | 'full_checkout'>('embedding');
 
   // Polling
   const [polling, setPolling] = useState(false);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollingRunRef = useRef(0);
+  const hostedCheckoutWindowRef = useRef<Window | null>(null);
 
   // Derived state
-  const isIdle = !session && !paymentResult && !loading;
-  const isCardEntry = !!session && !paymentResult;
-  const isCompleted = paymentResult?.status === 'completed';
-  const isFailed = paymentResult?.status === 'failed';
-
-  const completedTxn = isCompleted ? paymentResult.transactions[0] ?? null : null;
-  const completedLineItem = completedTxn?.line_items?.[0] ?? null;
+  const isCompleted = paymentStatus?.status === 'completed';
+  const isFailed = paymentStatus?.status === 'failed';
+  const isTerminal = isCompleted || isFailed;
+  const isIdle = !session && !paymentStatus && !loading;
+  const isCardEntry = !!session && !isTerminal;
+  const isAwaitingResult = paymentStatus?.status === 'awaiting_result';
 
   // ── Start Checkout ─────────────────────────────────────────
   // Call this when the user clicks "Pay" or when the AI agent triggers a purchase.
 
-  const handleCheckout = async () => {
+  const handleCheckout = async (
+    mode: 'embedding' | 'full_checkout' = 'embedding'
+  ) => {
+    // Open hosted checkout synchronously from the click so popup blockers do not
+    // reject it after the create-session network request finishes.
+    let checkoutWindow: Window | null = null;
+    if (mode === 'full_checkout') {
+      checkoutWindow = window.open('about:blank', '_blank');
+      if (!checkoutWindow) {
+        setError('Allow popups to open secure checkout.');
+        return; // Do not create an orphaned server session when the popup is blocked.
+      }
+      checkoutWindow.opener = null;
+      hostedCheckoutWindowRef.current = checkoutWindow;
+    }
+
     setLoading(true);
     setError(null);
-    setPaymentResult(null);
+    setPaymentStatus(null);
+    setIntegrationType(mode);
 
+    let createdSession: SessionResponse | null = null;
     try {
-      // ADAPT: Get userId and userEmail from your auth system, not hardcoded
-      // ADAPT: Get totalAmount/currency from your cart, product, or AI agent context
+      // The browser supplies only an opaque checkout reference and presentation mode.
+      // The server authenticates the user and resolves all authoritative order fields.
       const s = await createPravaSession({
-        userId: 'user_123',            // ← Replace: from your auth context
-        userEmail: 'user@example.com', // ← Replace: from your auth context
-        totalAmount: '49.99',          // ← Replace: from your product/cart
-        currency: 'USD',               // ← Replace: from your product/cart
+        checkoutRef: 'demo-purchase',  // ← Replace: server-owned cart/order reference
+        integrationType: mode,
       });
-      setSession(s);
+      createdSession = s;
 
-      // Start polling immediately — it runs in parallel with the iframe
+      // Full checkout must navigate to the backend-provided iframe_url verbatim.
+      if (mode === 'full_checkout') {
+        checkoutWindow!.location.replace(s.iframe_url);
+      }
+
+      setSession(s);
+      // Start polling immediately — it runs in parallel with the iframe.
       startPolling(s.session_id);
 
-      // ADAPT: Choose embed or newtab based on your UX needs
-      // For newtab approach, uncomment:
-      // window.open(s.iframe_url, '_blank');
-
     } catch (err) {
+      checkoutWindow?.close();
+      if (hostedCheckoutWindowRef.current === checkoutWindow) {
+        hostedCheckoutWindowRef.current = null;
+      }
+      // If navigation failed after creation, revoke the otherwise-orphaned flow.
+      if (createdSession) {
+        await revokePravaSession(createdSession.session_id).catch(() => undefined);
+      }
       setError(err instanceof Error ? err.message : 'Failed to start checkout');
     } finally {
       setLoading(false);
@@ -94,52 +134,101 @@ export default function CheckoutPage() {
 
   // ── Polling Logic ──────────────────────────────────────────
   // Polls GET /v1/sessions/{session_id}/payment-result every 3s.
-  // Stops when status is "completed" or "failed".
+  // `pending` and `processing` keep polling. `awaiting_result` means the
+  // credential is ready for a trusted SERVER worker; keep polling while that
+  // worker charges it and calls reportPaymentStatus. Stop only at a terminal
+  // `completed` or `failed` response.
 
   const stopPolling = useCallback(() => {
+    pollingRunRef.current += 1;
     if (pollingRef.current) {
-      clearInterval(pollingRef.current);
+      clearTimeout(pollingRef.current);
       pollingRef.current = null;
     }
     setPolling(false);
   }, []);
 
   const startPolling = (sessionId: string) => {
+    const pollingRun = ++pollingRunRef.current;
+    const deadline = Date.now() + POLL_TIMEOUT_MS;
+    let attempts = 0;
+    let consecutiveErrors = 0;
     setPolling(true);
 
     const doPoll = async () => {
-      try {
-        const result = await pollPaymentResult(sessionId);
-
-        if (result.status === 'completed' || result.status === 'failed') {
-          setPaymentResult(result);
+      attempts += 1;
+      if (attempts > MAX_POLL_ATTEMPTS || Date.now() >= deadline) {
+        if (pollingRun === pollingRunRef.current) {
+          setError('Timed out waiting for payment status. Start a new checkout session.');
           stopPolling();
         }
-        // status === 'pending' → keep polling
-      } catch {
-        // Keep polling on transient errors (network glitches, etc.)
+        return;
+      }
+
+      try {
+        const result = await pollPaymentStatus(sessionId);
+        if (pollingRun !== pollingRunRef.current) return;
+        consecutiveErrors = 0;
+        setPaymentStatus(result);
+
+        if (result.status === 'completed' || result.status === 'failed') {
+          stopPolling();
+          return;
+        }
+        // pending | processing | awaiting_result → keep polling
+      } catch (err) {
+        if (pollingRun !== pollingRunRef.current) return;
+        consecutiveErrors += 1;
+        if (consecutiveErrors >= MAX_CONSECUTIVE_POLL_ERRORS) {
+          setError(err instanceof Error ? err.message : 'Unable to refresh payment status.');
+          stopPolling();
+          return;
+        }
+      }
+
+      if (pollingRun === pollingRunRef.current) {
+        pollingRef.current = setTimeout(doPoll, POLL_INTERVAL_MS);
       }
     };
 
-    // Poll immediately, then every 3 seconds
-    doPoll();
-    pollingRef.current = setInterval(doPoll, 3000);
+    // Poll immediately, then schedule the next non-overlapping request.
+    void doPoll();
   };
 
   // Cleanup polling on unmount
   useEffect(() => {
     return () => {
-      if (pollingRef.current) clearInterval(pollingRef.current);
+      pollingRunRef.current += 1;
+      if (pollingRef.current) clearTimeout(pollingRef.current);
     };
   }, []);
 
   // ── Reset ──────────────────────────────────────────────────
 
-  const handleReset = () => {
+  const resetLocalCheckout = useCallback(() => {
     stopPolling();
+    // A completed hosted tab may have redirected to a merchant page. Drop our
+    // reference without closing that unrelated destination.
+    hostedCheckoutWindowRef.current = null;
     setSession(null);
-    setPaymentResult(null);
+    setPaymentStatus(null);
     setError(null);
+  }, [stopPolling]);
+
+  const handleCancel = async () => {
+    if (!session || cancelling) return;
+    setCancelling(true);
+    setError(null);
+    try {
+      // Revoke on the authenticated server before presenting a fresh attempt.
+      await revokePravaSession(session.session_id);
+      hostedCheckoutWindowRef.current?.close();
+      resetLocalCheckout();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to cancel checkout.');
+    } finally {
+      setCancelling(false);
+    }
   };
 
   // ── Render ─────────────────────────────────────────────────
@@ -151,7 +240,7 @@ export default function CheckoutPage() {
   //   IDLE       → "Pay" button, product summary, etc.
   //   LOADING    → Loading spinner / skeleton
   //   CARD_ENTRY → PravaCardForm component (iframe) + polling indicator
-  //   COMPLETED  → Success message + credential display (or just navigate away)
+  //   COMPLETED  → Confirmed success message (credentials stay server-side)
   //   FAILED     → Error message + retry option
 
   return (
@@ -166,42 +255,55 @@ export default function CheckoutPage() {
       {/* STATE: IDLE — Show checkout trigger */}
       {/* ADAPT: This could be a button, a product card, or triggered by an AI agent */}
       {isIdle && (
-        <button onClick={handleCheckout} disabled={loading}>
+        <button onClick={() => handleCheckout('embedding')} disabled={loading}>
           {loading ? 'Creating session…' : 'Pay'}
         </button>
       )}
+
+      {/* For a hosted/new-tab flow, call handleCheckout('full_checkout') instead. */}
 
       {/* STATE: CARD_ENTRY — Iframe is mounted, polling is running */}
       {/* ADAPT: Wrap in your page layout, card container, modal, etc. */}
       {isCardEntry && session && (
         <div>
           {/* The card form component — mounts the Prava iframe */}
-          <PravaCardForm
-            session={session}
-            onError={(err) => setError(err.message)}
-          />
+          {integrationType === 'embedding' && (
+            <PravaCardForm
+              session={session}
+              onError={(err) => setError(err.message)}
+              onDismiss={resetLocalCheckout}
+            />
+          )}
+
+          {integrationType === 'full_checkout' && (
+            <p>Complete payment in the secure Prava tab.</p>
+          )}
 
           {/* ADAPT: Polling indicator — show however fits your UX */}
           {polling && <p>Waiting for payment completion…</p>}
 
+          {isAwaitingResult && paymentStatus?.credential_ready && (
+            <p>
+              Payment credential is ready on the server. Your server-side payment
+              worker must durably claim it, use an idempotent processor operation,
+              and report APPROVED or DECLINED to Prava.
+            </p>
+          )}
+
           {/* ADAPT: Cancel/back option */}
-          <button onClick={handleReset}>Cancel</button>
+          <button onClick={handleCancel} disabled={cancelling}>
+            {cancelling ? 'Cancelling…' : 'Cancel'}
+          </button>
         </div>
       )}
 
-      {/* STATE: COMPLETED — Payment succeeded, credential available */}
-      {/* ADAPT: Show success in your app's style. You may want to:
-          - Display the credential (for testing/debugging)
-          - Navigate to a confirmation page
-          - Pass the credential to the AI agent
-          - Simply show a success message */}
-      {isCompleted && completedTxn && (
+      {/* STATE: COMPLETED — APPROVED outcome was confirmed with Prava. */}
+      {/* ADAPT: Show success or navigate to a confirmation page. */}
+      {isCompleted && (
         <div>
           <h2>Payment Complete</h2>
-          <p>Network Token: {completedLineItem?.token}</p>
-          <p>Dynamic CVV: {completedLineItem?.dynamic_cvv}</p>
-          <p>Expiry: {completedLineItem?.expiry_month}/{completedLineItem?.expiry_year}</p>
-          <button onClick={handleReset}>New Checkout</button>
+          <p>The approved processor outcome was confirmed.</p>
+          <button onClick={resetLocalCheckout}>New Checkout</button>
         </div>
       )}
 
@@ -210,8 +312,8 @@ export default function CheckoutPage() {
       {isFailed && (
         <div>
           <h2>Payment Failed</h2>
-          <p>{paymentResult?.transactions[0]?.error?.message || 'Unknown error'}</p>
-          <button onClick={handleReset}>Try Again</button>
+          <p>{paymentStatus?.error?.message || 'Unknown error'}</p>
+          <button onClick={resetLocalCheckout}>Try Again</button>
         </div>
       )}
     </div>

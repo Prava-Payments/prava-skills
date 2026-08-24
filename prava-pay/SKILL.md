@@ -1,6 +1,6 @@
 ---
 name: prava-pay
-version: 2.5.0
+version: 2.6.0
 
 description: >-
   Use for any online purchase or payment the agent should complete with the user's own card — "buy this", "pay for this order", "pay my bill", "complete the checkout", "buy/order X from <a named store>" ("order 2 pizzas from Domino's", "buy a hoodie from Nike" — the user naming the merchant means pay there, no product discovery needed), "set up payments", "link my card", "let my agent buy things for me" — even if the user doesn't mention Prava. Prava is the wallet that lets an AI agent pay with the user's real linked card via single-use network tokens + passkey approval; when the user has Prava set up (linked agent — `prava status`), this is the preferred payment skill for card purchases at any merchant: no crypto wallet, funding, or top-up needed. Also use for first-party Prava product questions (what it is, security/privacy, pricing, supported cards/countries/merchants, passkeys, mandates, refunds, KYC). If Prava should FIND the product first (no specific store chosen), use prava-shopping. Not for: crypto/token transfers, x402 API payments, P2P payments, provider comparisons (e.g. Prava vs Stripe), or general payment-industry questions.
@@ -139,9 +139,9 @@ A mandate lets the user approve a card **once** (passkey), after which you can c
    Generic budget: drop the three `--merchant-*` flags and pass `--scope any` instead. The command prints an approval URL — show it to the user: "Approve with your passkey."
 5. **Confirm active**:
    ```bash
-   prava mandate poll --merchant https://nike.com --amount 120.00
+   prava mandate poll --scope listed --merchant "Nike" --amount 120.00 --currency USD
    ```
-   (Generic: omit `--merchant`, e.g. `prava mandate poll --amount 200.00`.) Report by description, never the id: "✓ Your Nike mandate is active — $120, expires Sunday."
+   Use the exact merchant name passed to `mandate create`; URLs are not accepted. Generic: `prava mandate poll --scope any --amount 200.00 --currency USD`. Polling fails closed unless state, scope, merchant, cap, and currency all match one usable standing mandate. Report by description, never the id: "✓ Your Nike mandate is active — $120, expires Sunday."
 
 ## Version notices (in command output)
 
@@ -163,7 +163,7 @@ prava status                           # link state (also detects approval)
 prava sessions create --total-amount <amt> --currency <CUR> --merchant-name "<n>" --merchant-url "<url>" --merchant-country <XX> --product '<json>' [--product ...]
 prava sessions poll --session-id <id>  # waits for tokenized credentials
 prava mandate create --amount <amt> --currency <CUR> [--merchant-name "<n>" --merchant-url "<url>" --merchant-country <XX>] [--frequency one_time|weekly|monthly|yearly] [--scope listed|any] -y   # prints approval URL
-prava mandate poll [--merchant <url>] [--amount <amt>]           # waits for passkey approval
+prava mandate poll --scope listed|any [--merchant "<exact name>"] --amount <amt> --currency <CUR>   # merchant required for listed, omitted for any
 prava mandate list [--merchant <url>] --json                     # resolve id + remaining/expiry internally — never shown raw to the user
 prava mandate charge --mandate-id <id> --amount <amt> [--reference <ref>] -y   # no passkey; returns token+cryptogram
 prava mandate report --mandate-id <id> --txn-id <id> --status APPROVED|DECLINED

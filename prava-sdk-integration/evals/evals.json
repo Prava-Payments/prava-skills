@@ -3,69 +3,86 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Integrate Prava payments into my Next.js 14 App Router app to charge users $20/month for a Pro plan. My keys are pk_test_abc and sk_test_xyz, backend is https://sandbox.api.prava.space.",
-      "expected_output": "Plan installs SDK, sets env vars correctly (NEXT_PUBLIC_ on publishable key + backend URL only, never on secret key), creates a server action / route handler for session creation using the secret key, mounts the iframe via PravaSDK.collectPAN in a client component, polls payment-result from the server with session_id + Bearer secret key.",
+      "prompt": "Integrate Prava payments into my Next.js 14 App Router app as an embedded custom checkout that makes a one-time $20 charge for one month of a Pro plan. My keys are pk_test_abc and sk_test_xyz, backend is https://sandbox.api.prava.space.",
+      "expected_output": "Plan installs the SDK, exposes only the publishable key to the browser, keeps the backend URL and secret key server-side, creates an embedding session with purchase_context.custom, mounts the returned iframe URL verbatim, and performs bounded payment polling, credential use, the real processor charge, and report-status on the server.",
       "files": [],
       "expectations": [
         "Plan runs 'npm install @prava-sdk/core' (or pnpm/yarn equivalent)",
         "Plan stores MERCHANT_SECRET_KEY in .env.local WITHOUT the NEXT_PUBLIC_ prefix",
         "Plan stores NEXT_PUBLIC_PUBLISHABLE_KEY with the NEXT_PUBLIC_ prefix (client-safe)",
+        "Plan stores PRAVA_BACKEND_URL as a server-side variable without requiring a NEXT_PUBLIC_ prefix",
         "Plan creates a server-side mechanism (server action, route handler, or API route) that calls POST /v1/sessions using MERCHANT_SECRET_KEY",
-        "Plan mounts PravaSDK.collectPAN on the frontend with onSuccess and onError callbacks",
+        "The create-session body uses purchase_context: { custom: [...] }, not a bare purchase_context array, and sets integration_type to embedding",
+        "Plan mounts the Prava iframe from the backend-returned iframe_url without rewriting its session query parameter",
+        "Plan starts collectPAN without awaiting it or relying on the current onSuccess callback; server status is authoritative",
         "Plan polls payment-result from the SERVER side using session_id in the URL and Bearer MERCHANT_SECRET_KEY as auth",
-        "Plan does NOT call POST /v1/sessions directly from the browser"
+        "Plan persists a session-to-user/order binding and authorizes any browser-facing sanitized status request against it",
+        "Plan uses a bounded poll with a timeout: pending and processing continue; awaiting_result is actionable only when one line item has txn_ref_id, token, dynamic_cvv, expiry_month, and expiry_year",
+        "Plan reports APPROVED only for an actually approved processor response and DECLINED for an actually declined response; it never fabricates approval",
+        "Plan expects completed or failed only after report-status succeeds, and never charges again if payment-result is already terminal",
+        "Plan does NOT call POST /v1/sessions from the browser or return network-token credentials to the client"
       ]
     },
     {
       "id": 2,
-      "prompt": "Add Prava to my Express server. My keys are pk_test_xyz, sk_test_abc, backend https://sandbox.api.prava.space.",
-      "expected_output": "Plan installs SDK, uses non-NEXT_PUBLIC env var names appropriate for Express, creates POST /v1/sessions and GET payment-result routes server-side, returns session_token + iframe_url to the frontend.",
+      "prompt": "Add an embedded Prava custom checkout to my Express app and its browser frontend. My keys are pk_test_xyz, sk_test_abc, backend https://sandbox.api.prava.space.",
+      "expected_output": "Plan installs the browser SDK, uses server-only Express environment variables for the backend URL and secret key, creates authenticated server-side session and payment orchestration, returns only required non-secret session fields, and keeps credentials, the real processor charge, and report-status on the server.",
       "files": [],
       "expectations": [
         "Plan installs @prava-sdk/core",
         "Plan stores the secret key in .env (NOT prefixed with NEXT_PUBLIC_, VITE_, or REACT_APP_)",
-        "Plan creates an Express route handler that calls POST /v1/sessions with the secret key",
+        "Plan creates an authenticated Express route that derives checkout data from trusted server state, calls POST /v1/sessions with the secret key, wraps purchases as purchase_context: { custom: [...] }, and sets integration_type to embedding",
         "Plan returns session_id, session_token, and iframe_url to the frontend in the session response",
+        "Plan stores the created session's ownership and rejects status requests whose session_id is not bound to the authenticated user/order",
         "Plan does NOT use Next.js-specific patterns (server actions, NEXT_PUBLIC_)",
-        "Plan exposes payment-result polling via a server endpoint (e.g. GET /api/payment-result/:sessionId)"
+        "Plan bounds payment-result polling and charges only a complete awaiting_result line item containing txn_ref_id, token, dynamic_cvv, expiry_month, and expiry_year",
+        "Plan reports the actual processor outcome via POST /v1/sessions/{session_id}/report-status and never hardcodes APPROVED",
+        "Plan treats completed and failed as terminal, does not double-charge, and never returns payment-result credentials to the browser"
       ]
     },
     {
       "id": 3,
       "prompt": "I want to put my Prava secret key in NEXT_PUBLIC_SECRET_KEY so I can call POST /v1/sessions directly from my React component. Show me how.",
-      "expected_output": "Plan REFUSES to put the secret key in client-side vars. Explains the security risk. Provides the correct architecture: secret key server-side only, browser receives session_token from the server.",
+      "expected_output": "Plan REFUSES to put the secret key in client-side variables, explains the risk, and keeps session creation, payment-result credentials, merchant charging, and report-status server-side. The browser receives only browser-safe configuration and the non-secret session fields required by the selected flow.",
       "files": [],
       "expectations": [
         "Plan refuses to put MERCHANT_SECRET_KEY (or any sk_* key) in NEXT_PUBLIC_, VITE_, or REACT_APP_ prefixed env vars",
         "Plan explains why: the secret key would be exposed in the browser bundle to any user / attacker",
-        "Plan provides the correct alternative architecture: secret key on server, server creates session, browser receives session_token + iframe_url",
+        "Plan provides the correct alternative architecture: the server creates the session; the browser uses the publishable key plus session_token and the backend-returned iframe_url, with session_id exposed only if needed for an authenticated sanitized-status request",
+        "Plan does not append session_token or any JWT to iframe_url",
         "Plan does NOT generate any code that puts sk_* in client-side vars or calls POST /v1/sessions from the browser"
       ]
     },
     {
       "id": 4,
-      "prompt": "I'm getting stale 'pending' responses when polling for payment-result in my Next.js app. The user completed payment in the iframe but my server keeps seeing pending status for a long time.",
-      "expected_output": "Plan diagnoses Next.js fetch caching as the likely cause. Adds ?_t=${Date.now()} cache-buster, cache: 'no-store', and next: { revalidate: 0 } to the fetch options.",
+      "prompt": "I'm getting stale 'pending' responses while server-side polling payment-result for a custom checkout in my Next.js app. The user completed the iframe steps, but my server keeps seeing pending for a long time.",
+      "expected_output": "Plan verifies the custom-checkout state machine, complete credential shape, bounded polling, and Next.js caching. Pending and processing continue; a complete awaiting_result line item is charged once on the server and the actual outcome is reported; terminal states are never charged again.",
       "files": [],
       "expectations": [
-        "Plan identifies Next.js fetch caching / deduplication as a likely cause",
+        "Plan treats both pending and processing as non-terminal statuses",
+        "Plan inspects awaiting_result for one complete server-only line item containing txn_ref_id, token, dynamic_cvv, expiry_month, and expiry_year instead of waiting for completed before charging",
+        "Plan reports the actual processor APPROVED or DECLINED outcome and expects completed or failed only after report-status succeeds",
+        "Plan uses a bounded attempt/time deadline and treats an already completed or failed result as terminal without charging again",
+        "Plan identifies Next.js fetch caching / deduplication as another possible cause of stale observations",
         "Plan adds a ?_t=${Date.now()} (or similar) query-parameter cache-buster to the polling URL",
         "Plan adds cache: 'no-store' to the fetch options",
         "Plan mentions next: { revalidate: 0 } as an additional safeguard",
-        "Plan does NOT suggest the problem is on Prava's backend"
+        "Plan does not blame Prava's backend before verifying one-session identity, custom mode, uncached requests, and the raw server response"
       ]
     },
     {
       "id": 5,
-      "prompt": "Build a Vanilla JS (no framework) payment page that uses Prava. Keys: pk_test_abc, sk_test_xyz.",
-      "expected_output": "Plan uses @prava-sdk/core in the browser via a bundler or script tag, but session creation MUST still happen server-side (the secret key never enters client code).",
+      "prompt": "Build an embedded Vanilla JS (no framework) custom-checkout payment page that uses Prava. Keys: pk_test_abc, sk_test_xyz.",
+      "expected_output": "Plan bundles @prava-sdk/core or uses a verified ESM CDN/import-map setup, while all secret-key operations happen in a trusted authenticated application backend. No secret value, client secret assignment, or direct browser request to Prava's Session API appears in the HTML or browser JavaScript.",
       "files": [],
       "expectations": [
-        "Plan installs @prava-sdk/core or includes it via script tag / bundler",
-        "Plan REQUIRES a server-side endpoint to create the session (does NOT call POST /v1/sessions from the browser)",
+        "Plan bundles @prava-sdk/core or uses a verified ESM CDN URL/import map; it does not assume an unpublished global/UMD PravaSDK build",
+        "Plan REQUIRES a trusted authenticated application-backend endpoint to create the session (a same-origin BFF is recommended but not mandatory) and does NOT call POST /v1/sessions from the browser",
         "Plan uses PravaSDK.collectPAN in the browser with the publishable key only",
-        "Plan does NOT embed MERCHANT_SECRET_KEY in any client-side JavaScript, HTML, or build artifact",
-        "Plan describes how to set up the server endpoint (even a minimal Node/Express snippet) in the same plan"
+        "Plan does not await collectPAN or rely on onSuccess for current iframe completion; it uses sanitized server status",
+        "Plan does NOT place any secret value, sk_* example/placeholder assignment, or client-accessible secret environment value in JavaScript, HTML, or build artifacts; explanatory comments may name the server-only MERCHANT_SECRET_KEY variable",
+        "Plan describes how to set up the server endpoint (even a minimal Node/Express snippet) in the same plan",
+        "Plan keeps payment-result credentials and merchant charging server-side and reports only the actual processor outcome"
       ]
     },
     {
@@ -82,38 +99,50 @@
     },
     {
       "id": 7,
-      "prompt": "I want to integrate Prava but I haven't received my API keys yet. Can you set everything up so I can just paste them in later?",
-      "expected_output": "Plan sets up env vars with placeholder strings (sk_test_YOUR_SECRET_KEY etc.) and tells the user where to obtain the three credentials (publishable key, secret key, backend URL).",
+      "prompt": "I want to set up an embedded Prava custom checkout, but I haven't received my API keys yet. Can you scaffold the current integration so I can paste them in later?",
+      "expected_output": "Plan scaffolds the current secure contract with obvious placeholders for two credentials (publishable and secret keys) plus the documented environment-specific backend URL. Keys come from Prava onboarding; the backend URL is selected to match sandbox or production.",
       "files": [],
       "expectations": [
         "Plan creates env var entries with placeholder strings, NOT fabricated real-looking keys",
-        "Plan tells the user they need three credentials: publishable key (pk_*), secret key (sk_*), and backend URL",
-        "Plan tells the user where to obtain them (from Prava during account onboarding)",
-        "Plan does NOT invent or hallucinate real-looking key strings as if they were valid"
+        "Plan tells the user they need two credentials, a publishable key (pk_*) and secret key (sk_*), plus an environment-specific backend URL",
+        "Plan says keys come from Prava onboarding and selects the documented sandbox or production backend URL that matches those keys",
+        "Plan does NOT invent or hallucinate real-looking key strings as if they were valid",
+        "Plan keeps the secret key and PRAVA_BACKEND_URL server-side and exposes only the publishable key to browser code",
+        "Plan scaffolds purchase_context: { custom: [...] }, integration_type: embedding, and verbatim use of the returned iframe_url",
+        "Plan keeps payment-result credentials, bounded polling, processor charging, and actual-outcome report-status server-side"
       ]
     },
     {
       "id": 8,
       "prompt": "My Next.js card form polls for payment-result, but the parent page also creates a separate session for some reason. Now the iframe pays on one session but my polling never completes. What's wrong?",
-      "expected_output": "Plan diagnoses duplicate session creation. Recommends creating the session ONCE in the parent and passing session_id and session_token as props to the card form.",
+      "expected_output": "Plan diagnoses duplicate session creation, creates the session once, and passes a single SessionData object containing session_id, session_token, and the verbatim iframe_url to the card form. The same session_id drives only authenticated, sanitized server status checks.",
       "files": [],
       "expectations": [
         "Plan identifies that two different sessions were created (one in parent, one in card form)",
         "Plan recommends creating the session ONCE in the parent component",
-        "Plan recommends passing session_id and session_token down as props to the card form",
+        "Plan recommends passing session_id, session_token, and the backend-returned iframe_url down as props (or one equivalent SessionData object) to the card form",
+        "Plan uses that same session_id through an authenticated server endpoint that returns sanitized status rather than credentials",
+        "Plan requires that endpoint to verify the session_id belongs to the authenticated application user/order, preventing cross-user status access",
         "Plan does NOT suggest the issue is on Prava's backend"
       ]
     },
     {
       "id": 9,
-      "prompt": "Integrate Prava into my Next.js 14 App Router app. I'm using Tailwind and shadcn/ui. Keys are pk_test_abc and sk_test_xyz.",
-      "expected_output": "Plan acknowledges the project's styling (Tailwind) and component library (shadcn/ui), adapts the UI to use them rather than imposing custom CSS or a different library.",
+      "prompt": "Integrate an embedded Prava custom checkout into my Next.js 14 App Router app. I'm using Tailwind and shadcn/ui. Keys are pk_test_abc and sk_test_xyz.",
+      "expected_output": "Plan preserves the live Session API and security contract while adapting the embedded checkout UI to the project's App Router, Tailwind, and shadcn/ui conventions.",
       "files": [],
       "expectations": [
         "Plan acknowledges the user is on App Router (uses server actions or route handlers, not pages router)",
         "Plan adapts UI styling to use Tailwind utility classes",
         "Plan adapts components to use shadcn/ui primitives (Button, Card, etc.) where applicable",
-        "Plan does NOT impose a generic / default UI or use a different styling system"
+        "Plan does NOT impose a generic / default UI or use a different styling system",
+        "Plan creates the session on an authenticated server boundary with MERCHANT_SECRET_KEY and trusted checkout state, never in the browser",
+        "Plan uses purchase_context: { custom: [...] } and integration_type: embedding",
+        "Plan passes the backend-returned iframe_url verbatim to the SDK",
+        "Plan starts collectPAN without awaiting it or relying on onSuccess, because current iframe builds do not emit the legacy resolving event",
+        "Plan keeps bounded payment-result polling, complete credentials, processor charging, and report-status server-side",
+        "Plan authorizes sanitized browser status polling against a persisted session/user ownership binding",
+        "Plan reports the actual processor outcome, never fabricates APPROVED, and never returns credentials to the client"
       ]
     },
     {
@@ -131,26 +160,142 @@
     {
       "id": 11,
       "prompt": "What's the difference between the first-time card enrollment flow and the repeat purchase flow with Prava? Do I need different API calls?",
-      "expected_output": "Plan explains: identical session-create API call. Prava auto-detects returning users and shows saved cards. First time: user enters card + registers passkey. Repeat: user picks saved card + verifies passkey.",
+      "expected_output": "Plan explains that first-time and repeat purchases use the same POST /v1/sessions endpoint and base contract. First time enrolls a card and registers a passkey; repeat checkout can show saved cards automatically or optionally preselect an owned active card with card.card_id.",
       "files": [],
       "expectations": [
-        "Plan states the session-create API call is IDENTICAL for both first-time and repeat flows",
-        "Plan explains that Prava automatically detects returning users (no different endpoint needed)",
-        "Plan describes the first-time flow (card entry + passkey registration)",
-        "Plan describes the repeat flow (saved card selection + passkey verification)",
-        "Plan does NOT suggest using a different endpoint or different request parameters for repeat purchases"
+        "Plan states that both flows use the same POST /v1/sessions endpoint and required base contract; no separate repeat-purchase endpoint is required",
+        "Plan explains that Prava can detect returning users and show their saved cards",
+        "Plan describes the first-time flow as card entry, any required device binding, and passkey registration",
+        "Plan describes repeat checkout on an already bound device as saved-card selection plus passkey verification",
+        "Plan notes that a new browser or device may still require device-binding OTP",
+        "Plan explains that card: { card_id } is an optional repeat-flow parameter for preselecting a saved card that belongs to the customer and merchant"
       ]
     },
     {
       "id": 12,
-      "prompt": "I want the simplest possible Prava integration for my app — no fancy iframe embedding, just send the user somewhere to pay. What's the minimum I need?",
-      "expected_output": "Plan recommends Approach B (open iframe_url in a new tab). Still requires server-side session creation. Doesn't need PravaSDK.collectPAN.",
+      "prompt": "I want the simplest possible hosted Prava custom-checkout integration for my app — no iframe embedding, just send the user somewhere to pay. What's the minimum I need?",
+      "expected_output": "Plan creates a full_checkout custom session server-side and opens the returned iframe_url verbatim in a new tab without PravaSDK.collectPAN. The server performs bounded polling, uses one complete credential once, charges through the real processor, and reports its actual outcome.",
       "files": [],
       "expectations": [
-        "Plan recommends opening the iframe_url in a new tab/window (Approach B), not embedding via SDK",
+        "Plan recommends opening the backend-returned iframe_url verbatim in a new tab/window (Approach B), not embedding via SDK",
+        "Plan sets integration_type to full_checkout for the create-session request",
         "Plan still REQUIRES a server-side endpoint to create the session",
         "Plan does NOT use PravaSDK.collectPAN (not needed when redirecting)",
-        "Plan describes how the developer gets the payment credentials back (server-side polling of payment-result)"
+        "Plan uses bounded server-side polling through pending and processing until a complete awaiting_result line item contains txn_ref_id, token, dynamic_cvv, expiry_month, and expiry_year",
+        "Plan charges the complete credential once, reports the actual processor outcome, and expects completed or failed only after report-status succeeds",
+        "Plan treats an already completed or failed result as terminal, never double-charges, and never returns credentials to the browser"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Prava now returns 400 for my create-session request. I send purchase_context as [{ merchant_details: { name: 'Example', url: 'https://example.com', country_code_iso2: 'US' }, product_details: [{ description: 'Pro plan', unit_price: '20.00', quantity: 1 }] }]. Fix the request without weakening validation.",
+      "expected_output": "Plan identifies the legacy bare-array shape and changes it to purchase_context: { custom: [...] }. It preserves the custom purchase data and explains that quote mode is a separate mutually exclusive shape.",
+      "files": [],
+      "expectations": [
+        "Plan states that a bare purchase_context array is rejected by the current API",
+        "Plan shows purchase_context: { custom: [{ merchant_details, product_details }] } and preserves those valid inner fields",
+        "Plan does not rename custom to custom_purchase_context or invent another wrapper",
+        "Plan notes that custom mode and quote mode are mutually exclusive",
+        "Plan does not bypass, cast away, or disable request validation"
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "My Prava iframe is embedded inside a card form, but it renders the full checkout experience. I also have a separate button that opens checkout in a new tab. How should session creation differ?",
+      "expected_output": "Plan uses integration_type: 'embedding' for the SDK/card-form session and integration_type: 'full_checkout' for the new-tab session. It creates one session for the chosen launch mode and opens the backend-returned iframe_url.",
+      "files": [],
+      "expectations": [
+        "Plan sets integration_type to embedding for the embedded SDK flow",
+        "Plan sets integration_type to full_checkout for the new-tab flow",
+        "Plan does not use one session for both launch modes",
+        "Plan does not treat integration_type as a client-only SDK option",
+        "Plan uses the iframe_url returned by that session's create response"
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "Implement the server-side payment-result loop for a Prava custom checkout. I need to know exactly when to charge a complete returned credential and how the session reaches a terminal state for both approvals and declines.",
+      "expected_output": "Plan follows pending/processing -> complete awaiting_result line item -> one real processor charge -> actual-outcome report-status -> completed/failed after successful reporting. Polling is bounded, credentials never leave the server, and terminal sessions are never charged again.",
+      "files": [],
+      "expectations": [
+        "Plan continues polling while status is pending or processing",
+        "Plan uses a bounded attempt/time deadline rather than polling forever",
+        "Plan recognizes awaiting_result as actionable only when one line item has non-null txn_ref_id, token, dynamic_cvv, expiry_month, and expiry_year, and does not wait for completed before charging",
+        "Plan uses the complete credential only on the server and takes txn_ref_id from that credential-bearing line item, not txn_id",
+        "Plan calls POST /v1/sessions/{session_id}/report-status after the processor attempt and never hardcodes or fabricates APPROVED",
+        "Plan reports APPROVED for an actually approved processor response and, after report-status succeeds, expects a subsequent payment-result to be completed",
+        "Plan reports DECLINED for an actually declined processor response and, after report-status succeeds, expects a subsequent payment-result to be failed",
+        "Plan treats a pre-existing completed or failed result as terminal and never charges the credential again",
+        "Plan handles report-status failure as non-terminal instead of claiming payment success",
+        "Plan atomically claims txn_ref_id in durable storage before the processor call, uses a stable processor idempotency key, and resumes the same processor operation after a crash instead of charging again",
+        "Plan never returns any payment credential or processor authorization data to browser code"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "The create-session response gave me iframe_url=https://sandbox.collect.prava.space?session=ses_abc123 and a separate session_token JWT. Should I replace the session query value with the JWT before opening it?",
+      "expected_output": "Plan says no: use iframe_url exactly as returned. Its session query contains the opaque ses_ session ID, never the JWT. Embedded mode passes session_token separately to the SDK; hosted mode opens iframe_url without adding the token.",
+      "files": [],
+      "expectations": [
+        "Plan explicitly says to use iframe_url verbatim",
+        "Plan identifies ses_abc123 as a session ID, not a JWT",
+        "Plan does not replace, append, or otherwise put session_token in iframe_url",
+        "Plan explains that putting a JWT in a URL can leak it through browser history, logs, analytics, or referrers",
+        "Plan keeps session_id and session_token as distinct values",
+        "Plan passes session_token separately as an SDK input only for embedded mode; hosted/new-tab mode simply opens iframe_url verbatim"
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "My session uses mandate_setup: { intent: 'mandate_setup', recurring_frequency: 'monthly' }. The iframe finished, but payment-result never gives me token/CVV. Should I keep polling and then call the Session API report-status endpoint?",
+      "expected_output": "Plan identifies authorize-only mandate setup as a distinct lifecycle: it activates a mandate without an immediate credential, so the custom Session API awaiting_result/report-status loop does not apply. Later charges use the mandate charge endpoint and its matching charge-report endpoint with the real processor outcome.",
+      "files": [],
+      "expectations": [
+        "Plan states that mandate_setup intent mandate_setup is authorize-only and produces no immediate token or dynamic CVV",
+        "Plan does not keep polling Session API payment-result waiting for awaiting_result and does not call /v1/sessions/{session_id}/report-status for the setup",
+        "Plan says to resolve and persist the active mandate in trusted server-side state",
+        "Plan uses POST /v1/mandates/{mandate_id}/charge for a later charge and keeps its returned credential server-side",
+        "Plan notes that optional purchase_context on the mandate charge endpoint uses that endpoint's one-entry array schema, not the create-session custom/quote wrapper",
+        "Plan reports the actual later charge outcome to POST /v1/mandates/{mandate_id}/charges/{txn_id}/report with APPROVED or DECLINED",
+        "Plan never fabricates approval or exposes mandate charge credentials to browser code"
+      ]
+    },
+    {
+      "id": 18,
+      "prompt": "I set max_charges: 3 and valid_until at the end of the year on a one_time Prava mandate. Can I promise that the API itself will enforce exactly three charges through that date?",
+      "expected_output": "Plan says no. The fields are accepted, but the current mandate charge route does not enforce max_charges as a hard count limit, and one_time mandates use a fixed seven-day network validity window instead of the supplied valid_until. Any promised count gate must be enforced in trusted application state.",
+      "files": [],
+      "expectations": [
+        "Plan states that max_charges is validated/stored but is not currently enforced as a hard count cap by the mandate charge route",
+        "Plan requires an application-side trusted count gate if exactly three charges must be guaranteed",
+        "Plan states that one_time mandate setup uses a fixed seven-day card-network window rather than the supplied valid_until date",
+        "Plan does not claim that client-side checks are sufficient or that the current API enforces both promises"
+      ]
+    },
+    {
+      "id": 19,
+      "prompt": "My embedded Prava iframe works and server payment status advances, but await prava.collectPAN() and onSuccess never finish. How should the current integration handle completion?",
+      "expected_output": "Plan explains the current event mismatch: the high-level SDK resolves on legacy PRAVA_SUCCESS, while the live iframe emits enrollment/transaction lifecycle events instead. It starts collectPAN without awaiting/onSuccess dependency, catches SDK errors, and uses sanitized server-side payment state as authoritative completion.",
+      "files": [],
+      "expectations": [
+        "Plan identifies that current iframe builds do not emit the legacy PRAVA_SUCCESS event expected by collectPAN/onSuccess",
+        "Plan starts collectPAN without awaiting the returned Promise or gating UI/payment completion on onSuccess",
+        "Plan attaches error handling so rejected SDK initialization/iframe failures are not unhandled",
+        "Plan uses server-side payment-result or the appropriate quote/mandate lifecycle as authoritative",
+        "Plan does not fabricate a client success event or treat enrollment/browser events as processor approval"
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Our worker charged the Prava credential, then crashed before report-status. payment-result still says awaiting_result. Should the retry charge the returned token again and then report?",
+      "expected_output": "Plan says no. It uses txn_ref_id as a durable unique payment-attempt and processor-idempotency anchor, recovers or queries the original processor operation, persists its real outcome, and reports that outcome without creating a second charge.",
+      "files": [],
+      "expectations": [
+        "Plan explicitly rejects issuing a fresh processor charge merely because Prava remains awaiting_result",
+        "Plan requires an atomic durable claim or unique payment-attempt record keyed by txn_ref_id, not only an in-memory lock",
+        "Plan uses a stable processor idempotency key/reference derived from txn_ref_id and recovers or queries the same processor operation",
+        "Plan persists and reports the actual original processor outcome as APPROVED or DECLINED",
+        "Plan never exposes the credential or lets browser code decide whether to retry"
       ]
     }
   ]

@@ -66,6 +66,9 @@ describe('mandateCreateCommand', () => {
     });
     expect(captured.req.agentId).toBe('aa_1');
     expect(logs.some((l) => l.includes('collect.prava.space/s/sess_1'))).toBe(true);
+    expect(logs.join('\n')).toContain(
+      "prava mandate poll --scope listed --merchant 'Nike' --amount 120.00 --currency USD",
+    );
   });
 
   it('fills inert placeholder merchant/product for --scope any', async () => {
@@ -76,6 +79,9 @@ describe('mandateCreateCommand', () => {
     expect(captured.req.body.merchant_url).toBe('https://prava.space');
     expect(captured.req.body.merchant_country).toBe('US');
     expect(captured.req.body.products[0].unit_price).toBe('200.00');
+    expect(logs.join('\n')).toContain(
+      'prava mandate poll --scope any --amount 200.00 --currency USD',
+    );
   });
 
   it('--json still prints the body but exits 1 on a res.status >= 400 response', async () => {

@@ -223,13 +223,13 @@
     {
       "id": 17,
       "prompt": "Set up a mandate so you can buy the Nike Pegasus running shoes for me anytime this week, up to $150.",
-      "expected_output": "A plan that includes a HARD STOP confirming merchant, spending cap, and period with the user; states the 7-day maximum period for a one_time mandate; runs prava mandate create; then runs prava mandate poll; never shows the mandate id to the user.",
+      "expected_output": "A plan that includes a HARD STOP confirming merchant, spending cap, currency, and period with the user; states the 7-day maximum period for a one_time mandate; runs prava mandate create; then polls using listed scope, the exact Nike name, amount, and USD currency; never shows the mandate id to the user.",
       "files": [],
       "expectations": [
         "Plan includes a HARD STOP that confirms the merchant (Nike), spending cap ($150), and period with the user before creating the mandate",
         "Plan states or enforces that a one_time mandate's period cannot exceed 7 days",
         "Plan runs 'prava mandate create' with the confirmed merchant, cap, and period",
-        "Plan runs 'prava mandate poll' immediately after creating the mandate to wait for approval",
+        "Plan runs 'prava mandate poll' immediately after creation with --scope listed, exact merchant name Nike, the confirmed amount, and --currency USD",
         "Plan does NOT display or expose the mandate id to the user in its response"
       ]
     },

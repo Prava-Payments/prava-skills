@@ -36,7 +36,7 @@ const program = new Command();
 program
   .name('prava')
   .description('Prava CLI — smart wallet for AI agents')
-  .version('3.2.0');
+  .version('3.3.0');
 
 const setup = program
   .command('setup')
@@ -281,10 +281,20 @@ mandate
 mandate
   .command('poll')
   .description('Wait until a just-created mandate is active (after the user approves with a passkey)')
-  .option('--merchant <domain>', 'Disambiguate by merchant')
-  .option('--amount <amount>', 'Disambiguate by approved cap')
+  .requiredOption('--scope <scope>', 'Scope used at creation: listed | any')
+  .option('--merchant <name>', 'Exact merchant name used at creation (required for listed scope)')
+  .requiredOption('--amount <amount>', 'Exact approved cap')
+  .requiredOption('--currency <code>', 'Exact ISO 4217 currency code')
   .option('--json', 'Output raw JSON')
-  .action(async (opts) => { await mandatePollCommand({ merchant: opts.merchant, amount: opts.amount, json: opts.json }); });
+  .action(async (opts) => {
+    await mandatePollCommand({
+      scope: opts.scope,
+      merchant: opts.merchant,
+      amount: opts.amount,
+      currency: opts.currency,
+      json: opts.json,
+    });
+  });
 
 mandate
   .command('charge')
