@@ -18,7 +18,10 @@
  *
  * Usage:
  *   // Parent creates session first:
- *   const session = await createPravaSession({ userId, userEmail, totalAmount });
+ *   const session = await createPravaSession({
+ *     checkoutRef: 'demo-purchase',
+ *     integrationType: 'embedding',
+ *   });
  *   // Then passes it to this component:
  *   <PravaCardForm session={session} onError={(err) => console.error(err)} />
  *   // Parent polls for result using session.session_id
@@ -46,11 +49,13 @@ interface PravaCardFormProps {
   };
   /** Called when an error occurs */
   onError?: (error: PravaError | Error) => void;
+  /** Called when the user dismisses the hosted payment flow */
+  onDismiss?: (reason: string) => void;
 }
 
 // ── Component ──────────────────────────────────────────────
 
-export default function PravaCardForm({ session, onError }: PravaCardFormProps) {
+export default function PravaCardForm({ session, onError, onDismiss }: PravaCardFormProps) {
   const sdkRef = useRef<PravaSDK | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -65,7 +70,7 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
   const [error, setError] = useState<string | null>(null);
   const [validationState, setValidationState] = useState<CardValidationState | null>(null);
 
-  const mountSdk = useCallback(async () => {
+  const mountSdk = useCallback(() => {
     setLoading(true);
     setError(null);
     setSdkReady(false);
@@ -76,12 +81,33 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
       sdkRef.current = null;
     }
 
+    const handleSdkError = (err: unknown) => {
+      const message = err instanceof Error
+        ? err.message
+        : typeof err === 'object' && err && 'message' in err
+          ? String(err.message)
+          : 'Unknown error';
+      const errorValue: PravaError | Error =
+        typeof err === 'object' && err && 'code' in err
+          ? { code: String(err.code), message }
+          : err instanceof Error
+            ? err
+            : new Error(message);
+      setError(message);
+      onError?.(errorValue);
+      setLoading(false);
+    };
+
     try {
       const sdk = new PravaSDK({ publishableKey: PUBLISHABLE_KEY });
       sdkRef.current = sdk;
 
       if (containerRef.current) {
-        await sdk.collectPAN({
+        // Current iframe completion is authoritative through the server-side
+        // payment-result lifecycle. Do not await collectPAN or depend on
+        // onSuccess: current iframes emit enrollment/transaction events rather
+        // than the legacy PRAVA_SUCCESS event that resolves this Promise.
+        void sdk.collectPAN({
           sessionToken: session.session_token,
           iframeUrl: session.iframe_url,
           container: containerRef.current,
@@ -90,23 +116,13 @@ export default function PravaCardForm({ session, onError }: PravaCardFormProps) 
             setLoading(false);
           },
           onChange: (state: CardValidationState) => setValidationState(state),
-          onSuccess: () => {
-            // Payment completion is handled by the PARENT via polling.
-            // Do NOT add payment-result logic here — the parent polls using session_id.
-          },
-          onError: (err: PravaError) => {
-            setError(err.message);
-            onError?.(err);
-          },
-        });
+          onDismiss: ({ reason }) => onDismiss?.(reason),
+        }).catch(handleSdkError);
       }
     } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setError(msg);
-      onError?.(err instanceof Error ? err : new Error(msg));
-      setLoading(false);
+      handleSdkError(err);
     }
-  }, [session, onError]);
+  }, [session, onError, onDismiss]);
 
   // ⚠️ CRITICAL: Mount SDK on first render with Strict Mode handling
   useEffect(() => {

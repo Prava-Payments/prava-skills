@@ -1,12 +1,12 @@
 ---
 name: prava-sdk-integration
-version: 1.1.0
+version: 1.2.0
 
-description: Integrate Prava's payment SDK into AI applications — securely collect cards via PCI-compliant iframe, enroll for Visa tokenized payments, enable repeat purchases with passkey (biometric) verification, and poll for one-time payment credentials (network token + dynamic CVV). For AI application integration, not for AI agent CLI usage.
+description: Integrate Prava's payment SDK into AI applications — create server-side payment sessions, embed or host the PCI-compliant checkout, retrieve one-time Visa credentials, and report real processor outcomes. For application integrations, not the Prava agent CLI.
 homepage: https://prava.space
 author: Prava Payments
 user-invocable: true
-metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"API_SECRET_KEY","requires":{"env":[],"npm":["@prava-sdk/core"]}}}
+metadata: {"openclaw":{"emoji":"💳","category":"payments","primaryEnv":"MERCHANT_SECRET_KEY","requires":{"env":[],"npm":["@prava-sdk/core"]}}}
 tags:
   - payments
   - sdk
@@ -18,961 +18,416 @@ tags:
   - ai-applications
 ---
 
-# Prava SDK Integration — Application Guide
+# Prava SDK Integration
 
-This skill teaches AI coding agents how to integrate Prava payments into any AI application using the `@prava-sdk/core` npm package and Prava REST API.
+Integrate Prava into a web application without letting raw card data, the merchant secret key, or one-time payment credentials cross the wrong trust boundary.
 
-> **Looking for the AI agent CLI flow?** That's a separate skill: `prava-pay`. This skill is for AI applications integrating Prava into their web apps.
+This skill is for applications using `@prava-sdk/core` and Prava's merchant Session API. For an AI agent operating the Prava CLI, use the separate `prava-pay` skill.
 
----
+## Read the relevant resources
 
-## When to Activate
+- Read [references/session-api-reference.md](references/session-api-reference.md) when implementing or debugging create-session, payment-result, report-status, saved-card, or revoke calls.
+- Read [references/sdk-api-reference.md](references/sdk-api-reference.md) when mounting the iframe or handling SDK lifecycle/events.
+- Read [references/integration-flow.md](references/integration-flow.md) when deciding between custom checkout, quote checkout, embedded, and hosted flows.
+- Read [references/test-data.md](references/test-data.md) before running a sandbox test.
+- Adapt the files under `templates/nextjs`, `templates/express`, or `templates/vanilla` to the application's framework and design system. They are logic references, not a UI kit.
 
-Activate this skill when the user wants to:
-- Integrate Prava payments into their app
-- Add card enrollment / card collection to a web application
-- Set up `@prava-sdk/core`
-- Create a payment flow for an AI app
-- Enable tokenized card payments with passkey verification
-- Get one-time payment credentials (network token + dynamic CVV)
+## Non-negotiable invariants
 
-Trigger phrases: "integrate prava", "add prava sdk", "prava payments", "card enrollment", "add payment to my AI agent", "prava card collection", "tokenized payments", "passkey payments"
+1. **The merchant secret key is server-only in every environment.** Never put an `sk_*` value in HTML, client JavaScript, a browser bundle, or an environment variable prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`.
+2. **Create sessions on an authenticated application server.** Derive the user, amount, currency, destination merchant, and products from trusted server-side state. Persist the resulting `session_id` → application user/order binding, and enforce it on every browser-facing status request. Do not blindly relay browser-supplied values.
+3. **Use the current create-session `purchase_context` object.** On `POST /v1/sessions`, a bare array is rejected. Custom checkout is `{ custom: [entry] }`; quote checkout is `{ quote: true, quote_id, access_grant? }`.
+4. **Set the presentation explicitly.** Use `integration_type: "embedding"` for an SDK-mounted iframe and `integration_type: "full_checkout"` for a hosted/new-tab flow. The API default is `full_checkout`.
+5. **Pass `iframe_url` verbatim.** Its `session` query parameter contains an opaque `ses_...` session ID, not the JWT. Never rebuild the URL or replace that value with `session_token`.
+6. **Keep payment credentials server-side.** Polling returns a network token and dynamic CVV. Consume them in a trusted server/agent process; do not serialize or render them in the browser.
+7. **Treat `awaiting_result` as credential-ready for custom checkout.** `completed` normally happens only after the real processor outcome is reported. Waiting for `completed` before charging creates a deadlock.
+8. **Make the processor charge idempotent.** Before using a credential, atomically claim its `txn_ref_id` in durable storage and use a stable processor idempotency key derived from it. A worker retry must resume/query the same processor attempt, never create a second charge.
+9. **Report the actual outcome.** After attempting the charge, call `report-status` with `APPROVED` or `DECLINED`. Never fabricate approval merely to advance the state.
+10. **Branch authorize-only mandates before polling.** A session with `mandate_setup.intent: "mandate_setup"` creates an authorization for later charges; it emits no immediate payment credential. Do not wait for Session API `awaiting_result` or call Session API `report-status` for that setup.
+11. **Create one session per checkout attempt.** The iframe and payment-result poller must use the same `session_id` returned by that one call.
+12. **Revoke abandoned sessions.** A browser Cancel/restart action must call the authenticated server, verify session ownership, and invoke `POST /v1/sessions/{id}/revoke`. Closing an iframe/tab or clearing local state does not cancel the server session.
 
----
+## Required inputs
 
-## What Prava Does
+Collect these before integration:
 
-**Prava** is a payment stack for AI agents. It lets AI apps accept card payments without ever seeing raw card details.
+| Input | Sandbox | Production | Exposure |
+|---|---|---|---|
+| Backend URL | `https://sandbox.api.prava.space` | `https://api.prava.space` | Server-only is sufficient |
+| Publishable key | `pk_test_*` | `pk_live_*` | Browser-safe |
+| Merchant secret key | `sk_test_*` | `sk_live_*` | Server-only |
 
-1. **Card details stay in a PCI-compliant iframe** — your AI app never touches them
-2. **Cards are tokenized with Visa** — stored securely in a vault
-3. **Passkeys (biometrics)** protect every transaction — the user must approve
-4. **Session-based** — each flow starts with a server-side session creation
-5. **One-time credentials** — after payment, Prava generates a network token + dynamic CVV your agent uses to transact
+Test keys must be used with the sandbox URL; live keys must be used with the production URL. If keys are unavailable, add obvious placeholders and tell the user to obtain credentials from Prava onboarding. Never invent usable-looking credentials.
 
-### First-Time Flow
-```
-Your Server ──POST /v1/sessions──▶ Prava API
-                                      │
-              session_id    ◀─────────┘
-              session_token ◀─────────┘
-              iframe_url    ◀─────────┘
-                  │
-Your Frontend ────▶ Opens iframe (embed or new tab)
-                        │
-                  User enters card number, expiry, CVV
-                  in the secure PCI-compliant iframe
-                        │
-                  Card tokenized with Visa
-                  Stored in PCI-compliant vault
-                        │
-                  Device binding (first time on this browser/device):
-                  card issuer sends an SMS/email OTP → user enters the code
-                  (sandbox test code: 456789)
-                        │
-                  User registers a passkey on the card network's hosted page
-                  (Face ID / Touch ID / fingerprint)
-                        │
-                  ✅ Payment processed → one-time credential generated
-                        │
-Your Server ──GET /v1/sessions/{id}/payment-result──▶ Prava API
-                  │
-              token (16-digit Visa network token)
-              dynamic_cvv (one-time, 3 digits)
-              expiry_month, expiry_year
-                  │
-              AI agent uses credential to transact
-                  │
-Your Server ──POST /v1/sessions/{id}/report-status──▶ Prava API
-              (required: APPROVED or DECLINED)
-```
+## Current Session API contract
 
-> **First run takes ~2–3 minutes** because of device binding (OTP → passkey registration on the
-> card network's hosted page). Repeat purchases on the same browser skip the OTP — one biometric prompt.
+### Custom checkout
 
-### Repeat Flow
-```
-Your Server ──POST /v1/sessions──▶ Prava API  (identical API call)
-                  │
-Your Frontend ────▶ Opens iframe
-                        │
-                  Iframe shows saved cards (brand + last 4)
-                  User selects a card
-                  User verifies passkey (biometric)
-                        │
-                  ✅ Payment processed → credential generated
+`POST /v1/sessions` uses `Authorization: Bearer {MERCHANT_SECRET_KEY}` and a JSON body like this:
+
+```json
+{
+  "user_id": "user_123",
+  "user_email": "buyer@example.com",
+  "total_amount": "49.99",
+  "currency": "USD",
+  "description": "Order 123",
+  "integration_type": "embedding",
+  "purchase_context": {
+    "custom": [
+      {
+        "merchant_details": {
+          "name": "Zara",
+          "url": "https://www.zara.com",
+          "country_code_iso2": "US",
+          "category_code": "5651",
+          "category": "Apparel"
+        },
+        "product_details": [
+          {
+            "product_id": "sku_123",
+            "description": "Ribbed socks",
+            "unit_price": "49.99",
+            "quantity": 1
+          }
+        ],
+        "effective_until_minutes": 15
+      }
+    ]
+  }
+}
 ```
 
-Prava automatically detects returning users and shows their saved cards. The session API call is identical for both flows.
+Custom checkout currently supports exactly one purchase-context entry. `merchant_details` describes the destination merchant where the credential will be used, not the integrating AI application.
 
----
+### Quote checkout
 
-## Required Inputs
+Use quote mode only with a `quote_id` obtained through the Prava shop flow:
 
-Before starting integration, you MUST collect these from the user:
+```json
+{
+  "user_id": "user_123",
+  "user_email": "buyer@example.com",
+  "total_amount": "76.00",
+  "currency": "USD",
+  "integration_type": "full_checkout",
+  "purchase_context": {
+    "quote": true,
+    "quote_id": "qte_..."
+  }
+}
+```
 
-| Input | Format | Example |
-|-------|--------|---------|
-| **Publishable Key** | `pk_test_xxx` or `pk_live_xxx` | `pk_test_TaFAJcKaldaFoXErIEHw03p_7lAhXY94D3RsXgLV_3s` |
-| **Secret Key** | `sk_test_xxx` or `sk_live_xxx` | `sk_test_zGzBj2QzZVaFtO4dkY2ZLAGe7wRSf1zgzUPBheBksA4` |
-| **Backend URL** | Full URL | `https://sandbox.api.prava.space` (sandbox) / `https://api.prava.space` (production) |
+An `access_grant` may be supplied only when the quote owner explicitly issued one for a cross-caller flow. Do not invent or persist a grant. Quote and custom fields are mutually exclusive. For quote mode, the validated quote is authoritative: the requested amount/currency must match it exactly, and a mismatch can return `409 QUOTE_SESSION_MISMATCH` with canonical `quoted_amount` and `currency_iso`.
 
-**Match the URL to the key environment:** `sk_test_`/`pk_test_` keys only work against `sandbox.api.prava.space`; `sk_live_`/`pk_live_` keys only work against `api.prava.space`. Test keys pointed at the production URL fail with `401` — or worse, live keys pointed at sandbox silently test nothing.
+### Authorize-only mandate setup
 
-If the user hasn't provided these, ask:
-> "To integrate Prava, I need three things from you:
-> 1. Your **Publishable Key** (starts with `pk_test_` or `pk_live_`)
-> 2. Your **Secret Key** (starts with `sk_test_` or `sk_live_`)
-> 3. Your **Prava Backend URL** (`https://sandbox.api.prava.space` for sandbox, `https://api.prava.space` for production)
->
-> You should have received these when your account was created."
+Adding `mandate_setup.intent: "mandate_setup"` changes the lifecycle. The iframe authorizes and activates a standing mandate, while the setup order and transaction become `authorized`; no token/CVV is emitted for an immediate charge. Do not run the custom payment-result loop below for this intent.
 
----
+Resolve and store the active mandate on the server. A later charge uses `POST /v1/mandates/{mandate_id}/charge`; after using that charge's credential server-side, report the real outcome to `POST /v1/mandates/{mandate_id}/charges/{txn_id}/report`. These are mandate endpoints, not Session API `report-status`. See [references/session-api-reference.md](references/session-api-reference.md#mandate-setup) for the exact shapes.
 
-## Integration Steps
+### Relevant validation
 
-### Step 1: Detect the Framework
+- Merchant callers must send `user_id` and `user_email`.
+- `user_email` must use a routable ICANN domain; reserved/local TLDs are rejected.
+- `merchant_details.url` must be a public HTTPS URL on an ICANN-delegated domain, with no IP host or embedded credentials. Paths, queries, and fragments are reduced to the origin.
+- `country_code_iso2` is two uppercase letters.
+- `currency` is an uppercase code in Prava's supported allowlist; it is not an arbitrary three-letter value.
+- `total_amount` currently accepts a non-negative decimal string with at most two fractional digits.
+- `callback_url`, when present, must be HTTPS.
 
-Scan the user's project to determine the framework:
-- Check `package.json` for `next` → **Next.js**
-- Check `package.json` for `express` → **Express.js**
-- Check `package.json` for `react` (without Next) → **React SPA**
-- No framework → **Vanilla JS**
+### Success response
 
-### Step 2: Install the SDK
+```json
+{
+  "session_id": "ses_...",
+  "session_token": "eyJ...",
+  "expires_at": "2026-08-21T12:30:00.000Z",
+  "iframe_url": "https://sandbox.collect.prava.space?session=ses_...",
+  "order_id": "ord_..."
+}
+```
+
+Keep `session_id` for server-side polling. Pass `session_token` and the unmodified `iframe_url` separately to `PravaSDK.collectPAN`.
+
+## Integration workflow
+
+### 1. Inspect the application before editing
+
+- Detect the framework and package manager.
+- Reuse its auth identity; do not hardcode production users.
+- Reuse its server-side cart/order source and validation.
+- Match its component library, loading/error patterns, and styling.
+- Decide whether the flow is embedded or hosted before creating a session.
+
+### 2. Install and configure
 
 ```bash
 npm install @prava-sdk/core
-# or: pnpm add @prava-sdk/core
-# or: yarn add @prava-sdk/core
 ```
 
-### Step 3: Set Up Environment Variables
+Next.js example:
 
-Create a `.env` or `.env.local` file (depending on framework):
-
-**Next.js** (`.env.local`):
 ```env
-NEXT_PUBLIC_BACKEND_URL=https://sandbox.api.prava.space
+PRAVA_BACKEND_URL=https://sandbox.api.prava.space
 MERCHANT_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 NEXT_PUBLIC_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 ```
 
-**Express** (`.env`):
+Express example:
+
 ```env
 PRAVA_BACKEND_URL=https://sandbox.api.prava.space
 MERCHANT_SECRET_KEY=sk_test_YOUR_SECRET_KEY_HERE
 PRAVA_PUBLISHABLE_KEY=pk_test_YOUR_PUBLISHABLE_KEY_HERE
 ```
 
-> Sandbox URL shown, matching the `sk_test_`/`pk_test_` keys. For production, switch to `https://api.prava.space` **and** `sk_live_`/`pk_live_` keys together.
+Only the publishable key needs to reach the browser.
 
-**Other frameworks** — use the appropriate env prefix (`VITE_`, `REACT_APP_`, etc.) for client-side variables.
+### 3. Create the session on the server
 
-> **CRITICAL SECURITY RULE**: `MERCHANT_SECRET_KEY` must ONLY be used server-side. NEVER expose it in client-side code, environment variables prefixed with `NEXT_PUBLIC_`, `VITE_`, or `REACT_APP_`, or browser-accessible bundles. **This applies in EVERY environment — production, staging, development, demo, "just for testing", "quick local mode", or any other framing. There is no exception.** If the user doesn't have a server yet, set up a minimal Node/Express endpoint (5 lines) and run it locally on port 3001 or similar; never put the secret key in HTML, JavaScript, build artifacts, or any other browser-loadable surface.
-
-### Step 4: Create Server-Side Session Endpoint
-
-The server must call Prava's backend to create a session. This is where the secret key is used. See the **Session API Reference** (`references/session-api-reference.md`) for the full request/response schema, and the **Templates** section for framework-specific code.
-
-### Step 5: Create Frontend Integration
-
-Choose one of two approaches:
-
-**Approach A — Embedded iframe (richer UX):** Mount Prava's secure iframe directly in your page using the SDK. You get real-time validation events and callbacks.
+Define the wire types rather than accepting an untyped legacy array:
 
 ```typescript
-import { PravaSDK } from '@prava-sdk/core';
+type IntegrationType = 'embedding' | 'full_checkout';
 
-const prava = new PravaSDK({ publishableKey: 'pk_test_xxx' });
+interface PurchaseContextEntry {
+  merchant_details: {
+    name: string;
+    url: string;
+    country_code_iso2: string;
+    category_code?: string;
+    category?: string;
+  };
+  product_details: Array<{
+    product_id?: string;
+    description: string;
+    unit_price: string;
+    quantity?: number;
+  }>;
+  effective_until_minutes?: number;
+}
 
-await prava.collectPAN({
-  sessionToken: session.session_token,
-  iframeUrl: session.iframe_url,
-  container: '#card-form',        // DOM element or CSS selector
-  onReady: () => { /* iframe loaded */ },
-  onChange: (state) => { /* real-time validation: state.isComplete, state.cardNumber.isValid, etc. */ },
-  onSuccess: (result) => { /* card enrolled: result.enrollmentId, result.last4, result.brand */ },
-  onError: (error) => { /* handle error: error.code, error.message */ },
-});
-
-// On unmount:
-prava.destroy();
+type PurchaseContext =
+  | { custom: PurchaseContextEntry[]; quote?: false }
+  | { quote: true; quote_id: string; access_grant?: string };
 ```
 
-**Approach B — Open in new tab (simpler):** Just open the `iframe_url` in a new browser tab. The user completes everything there and gets redirected back.
+The application-facing session endpoint should authenticate the user and build the API body from trusted state:
 
 ```typescript
-window.open(session.iframe_url, '_blank');
-```
-
-### Step 6: Poll for Payment Credential (Server-Side)
-
-After the user completes the card flow, your server must poll for the one-time payment credential. This is how you get the **network token + dynamic CVV** that your AI agent uses to transact.
-
-```typescript
-// Server-side: GET /v1/sessions/{session_id}/payment-result
-// Auth: Bearer {MERCHANT_SECRET_KEY}  (NOT session_token)
-// Poll every 3 seconds until status is "completed" or "failed"
-// Timeout after ~90 seconds (30 attempts × 3s)
-
-const res = await fetch(
-  `${BACKEND_URL}/v1/sessions/${session_id}/payment-result?_t=${Date.now()}`,
-  {
-    headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` },
-    cache: 'no-store',  // Prevent Next.js caching
-  }
-);
-const data = await res.json();
-// data.status: "pending" | "awaiting_result" | "completed" | "failed"
-// data.transactions[0].line_items[0].token         → Visa network token (16 digits)
-// data.transactions[0].line_items[0].dynamic_cvv   → one-time CVV (3 digits)
-// data.transactions[0].line_items[0].expiry_month  → "12"
-// data.transactions[0].line_items[0].expiry_year   → "2027"
-```
-
-> **Key details:**
-> - Use `session_id` in the URL path (NOT `session_token`)
-> - Authenticate with `MERCHANT_SECRET_KEY` (NOT the session token)
-> - The `token` is a **Visa network token** — not the user's real card number
-> - The `dynamic_cvv` is **single-use** and changes every transaction
-> - Add `?_t=${Date.now()}` cache-buster to prevent stale responses in Next.js
-
-### Step 7: Report the Outcome (Server-Side, Required)
-
-After your agent charges the credential, report the result back so Prava can confirm the transaction with the card network. **Skipping this leaves every transaction stuck in `awaiting_result`.**
-
-```typescript
-// Server-side: POST /v1/sessions/{session_id}/report-status
-// Auth: Bearer {MERCHANT_SECRET_KEY}
-await fetch(`${BACKEND_URL}/v1/sessions/${session_id}/report-status`, {
+const response = await fetch(`${PRAVA_BACKEND_URL}/v1/sessions`, {
   method: 'POST',
   headers: {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${MERCHANT_SECRET_KEY}`,
+    Authorization: `Bearer ${MERCHANT_SECRET_KEY}`,
   },
   body: JSON.stringify({
-    txn_ref_id: lineItem.txn_ref_id,  // from payment-result → transactions[0].line_items[]
-    txn_status: 'APPROVED',           // or 'DECLINED'
+    user_id: authenticatedUser.id,
+    user_email: authenticatedUser.email,
+    total_amount: order.total,
+    currency: order.currency,
+    external_order_ref: order.id,
+    integration_type: 'embedding',
+    purchase_context: { custom: [order.purchaseContext] },
   }),
+  cache: 'no-store',
 });
 ```
 
-Report **every** outcome, including `DECLINED`. See `references/session-api-reference.md` for the full schema (`authorization_code`, `product_statuses`, etc.).
+Validate the response before returning the non-secret session fields needed by the page. Do not send `MERCHANT_SECRET_KEY` or a payment-result payload to the browser.
 
-### Step 8: Provide Test Data
+### 4. Render the checkout
 
-**Network test cards are provided by the Prava team.** Reach out to your Prava account manager during onboarding to receive sandbox test card details. Once received, the test card will include a 16-digit card number, a future expiry date (e.g., `12/28`), and a 3-digit CVV.
+#### Embedded iframe
 
-**Sandbox test OTP:** the first purchase from a new browser/device shows a one-time-code screen (device binding). In sandbox, the code is **`456789`**.
-
----
-
-## Known Gotchas
-
-These are common pitfalls discovered during integration. Address them proactively:
-
-| Gotcha | Problem | Solution |
-|--------|---------|----------|
-| **React Strict Mode double-mount** | In development, React 18 mounts/unmounts/remounts. The SDK gets destroyed on first cleanup and `hasStarted` guard prevents re-init. | Use a `hasStarted` ref that resets to `false` in the cleanup function. See Next.js card form template. |
-| **Next.js fetch caching** | Next.js may cache or deduplicate identical fetch requests. Polling returns stale "pending" responses. | Add cache-buster `?_t=${Date.now()}` and `cache: 'no-store'` + `next: { revalidate: 0 }` to fetch options. |
-| **Duplicate session creation** | Parent creates a session (for polling) and card form creates its own (for iframe) → user pays on one session, polling checks a different one. | Create session **once** in the parent, pass as prop to card form. Both iframe and polling use the same `session_id`. |
-| **`onReady` callback may not fire** | The SDK's `onReady` sometimes doesn't trigger, leaving loading spinner visible even though iframe is loaded. | Add a `MutationObserver` on the container to detect iframe appearance, plus a 5-second fallback timeout. |
-| **Polling with wrong identifier** | Using `session_token` instead of `session_id` in URL, or `session_token` as Bearer auth instead of secret key. | Always use `session_id` in URL path and `MERCHANT_SECRET_KEY` as Bearer auth. |
-
----
-
-## Adapting to the User's Project
-
-**The templates in this skill are LOGIC references, not ready-to-use UI.** When integrating Prava, you MUST adapt to the user's existing design system, patterns, and code style. Never impose a specific UI.
-
-### Before Writing Any Code, Scan the User's Project
-
-1. **Detect styling:** `tailwind.config.*` → Tailwind, `*.module.css` → CSS Modules, `styled-components`/`@emotion` → CSS-in-JS, `@shadcn/ui`/`@mui/material`/`@chakra-ui/react`/`antd`/`@mantine/core` → Use their components
-2. **Detect component patterns:** How do they handle loading states? Errors? Forms? Page structure?
-3. **Detect placement:** Existing checkout page? Settings page? AI agent purchase trigger? Create new page matching their structure if needed.
-4. **Detect auth:** How do they get user ID and email? (NextAuth, Clerk, custom?) Use their auth system — never hardcode.
-
-### What to Keep vs. What to Adapt
-
-| Keep Exactly (Critical Logic) | Adapt to User's Project |
-|------|------|
-| `hasStarted` ref + Strict Mode cleanup pattern | All visual rendering (loading, error, success states) |
-| MutationObserver + 5s timeout fallback for onReady | CSS/styling approach (Tailwind, CSS modules, etc.) |
-| Session created ONCE in parent, passed as prop | Component structure and file organization |
-| Polling with `session_id` + `MERCHANT_SECRET_KEY` | Page layout, navigation, routing |
-| SDK cleanup on unmount (`sdkRef.current?.destroy()`) | Auth system integration (where userId/email come from) |
-| Cache-busting on poll requests (`?_t=${Date.now()}`) | Error handling patterns (toast, alert, inline) |
-| `onSuccess: () => {}` (completion via polling, not callback) | Product/amount source (cart, AI context, props) |
-
----
-
-## Templates
-
-### Next.js: Server Action (`src/app/actions.ts`)
+Create the session with `integration_type: "embedding"`, then mount the returned URL without altering it:
 
 ```typescript
-'use server';
-
-// Falls back to sandbox — set NEXT_PUBLIC_BACKEND_URL=https://api.prava.space for production
-const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL || 'https://sandbox.api.prava.space';
-const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
-
-export interface SessionResponse {
-  session_id: string;
-  session_token: string;
-  expires_at: string;
-  iframe_url: string;
-  order_id: string;
-}
-
-export interface PaymentLineItem {
-  txn_ref_id: string;
-  merchant_name: string;
-  merchant_url: string;
-  total_amount: string;
-  status: string;
-  token: string | null;
-  dynamic_cvv: string | null;
-  expiry_month: string | null;
-  expiry_year: string | null;
-  products: Array<{
-    product_ref_id: string;
-    external_product_id: string | null;
-    name: string;
-    unit_price: string;
-    quantity: number;
-  }>;
-}
-
-export interface PaymentTransaction {
-  txn_id: string;
-  status: 'pending' | 'awaiting_result' | 'completed' | 'failed' | string;
-  line_items: PaymentLineItem[];
-  error?: { code: string; message: string };
-}
-
-export interface PaymentResultResponse {
-  session_id: string;
-  order_id: string | null;
-  status: 'pending' | 'awaiting_result' | 'completed' | 'failed' | string;
-  transactions: PaymentTransaction[];
-}
-
-interface CreateSessionParams {
-  userId: string;
-  userEmail: string;
-  totalAmount?: string;
-  currency?: string;
-  description?: string;
-  callbackUrl?: string;
-  purchaseContext?: Array<{
-    merchant_details: {
-      name: string;
-      url: string;
-      country_code_iso2: string;
-      category_code?: string;
-      category?: string;
-    };
-    product_details: Array<{
-      description: string;
-      unit_price: string;
-      quantity?: number;
-    }>;
-    effective_until_minutes?: number;
-  }>;
-}
-
-export async function createPravaSession({
-  userId, userEmail, totalAmount = '99.99', currency = 'USD', description, callbackUrl, purchaseContext,
-}: CreateSessionParams): Promise<SessionResponse> {
-  if (!MERCHANT_SECRET_KEY || MERCHANT_SECRET_KEY.includes('YOUR_SECRET_KEY')) {
-    throw new Error(
-      'MERCHANT_SECRET_KEY not configured. Add it to .env.local:\n' +
-      'MERCHANT_SECRET_KEY=sk_test_your_key_here'
-    );
-  }
-
-  const res = await fetch(`${BACKEND_URL}/v1/sessions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${MERCHANT_SECRET_KEY}`,
-    },
-    body: JSON.stringify({
-      user_id: userId,
-      user_email: userEmail,
-      total_amount: totalAmount,
-      currency,
-      description: description || 'Purchase',
-      ...(callbackUrl && { callback_url: callbackUrl }),
-      purchase_context: purchaseContext || [{
-        merchant_details: {
-          // The DESTINATION merchant — the real store the user is buying from, NOT your app.
-          // Example uses a real merchant; replace with the actual merchant of this purchase.
-          name: 'Zara',                       // ← Real merchant the user buys from (e.g. Zara)
-          url: 'https://www.zara.com',        // ← That merchant's real URL
-          country_code_iso2: 'US',            // ← Replace with your country
-          category_code: '5651',              // ← Optional: that merchant's MCC (5651 = apparel)
-          category: 'Apparel',                // ← Optional: human-readable category
-        },
-        product_details: [{
-          description: 'Purchase',
-          unit_price: totalAmount,
-          quantity: 1,
-        }],
-        effective_until_minutes: 15,
-      }],
-    }),
-  });
-
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(errorData.error?.message || `Failed to create session (HTTP ${res.status})`);
-  }
-
-  return res.json();
-}
-
-export async function pollPaymentResult(sessionId: string): Promise<PaymentResultResponse> {
-  if (!MERCHANT_SECRET_KEY) throw new Error('MERCHANT_SECRET_KEY not configured.');
-
-  const res = await fetch(
-    `${BACKEND_URL}/v1/sessions/${sessionId}/payment-result?_t=${Date.now()}`,
-    {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` },
-      cache: 'no-store',
-      next: { revalidate: 0 },
-    }
-  );
-
-  if (!res.ok) {
-    if (res.status === 404) throw new Error('Session not found');
-    const errorData = await res.json().catch(() => ({ error: { message: 'Unknown error' } }));
-    throw new Error(errorData.error?.message || `Failed to poll result (HTTP ${res.status})`);
-  }
-
-  return res.json();
-}
-
-export async function checkPravaHealth(): Promise<{ healthy: boolean }> {
-  try {
-    const res = await fetch(`${BACKEND_URL}/health`, { cache: 'no-store' });
-    return { healthy: res.ok };
-  } catch {
-    return { healthy: false };
-  }
-}
-```
-
-### Next.js: Card Form Component (`src/components/PravaCardForm.tsx`)
-
-> **CRITICAL LOGIC — do not change:** `hasStarted` ref for Strict Mode, MutationObserver + 5s timeout for onReady, SDK cleanup on unmount, session passed as prop (NOT created internally).
-
-```tsx
-'use client';
-
-import { useState, useEffect, useRef, useCallback } from 'react';
 import { PravaSDK } from '@prava-sdk/core';
-import type { PravaError, CardValidationState } from '@prava-sdk/core';
 
-const PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_PUBLISHABLE_KEY || '';
+const prava = new PravaSDK({ publishableKey });
 
-interface PravaCardFormProps {
-  /** Pre-created session from server action — do NOT create session inside this component */
-  session: {
-    session_token: string;
-    iframe_url: string;
-    order_id: string;
-    expires_at: string;
-  };
-  onError?: (error: PravaError | Error) => void;
-}
-
-export default function PravaCardForm({ session, onError }: PravaCardFormProps) {
-  const sdkRef = useRef<PravaSDK | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  // CRITICAL: React Strict Mode double-mount guard.
-  // Resets to false in cleanup so remount re-initializes.
-  const hasStarted = useRef(false);
-
-  const [loading, setLoading] = useState(true);
-  const [sdkReady, setSdkReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [validationState, setValidationState] = useState<CardValidationState | null>(null);
-
-  const mountSdk = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    setSdkReady(false);
-
-    if (sdkRef.current) {
-      sdkRef.current.destroy();
-      sdkRef.current = null;
-    }
-
-    try {
-      const sdk = new PravaSDK({ publishableKey: PUBLISHABLE_KEY });
-      sdkRef.current = sdk;
-
-      if (containerRef.current) {
-        await sdk.collectPAN({
-          sessionToken: session.session_token,
-          iframeUrl: session.iframe_url,
-          container: containerRef.current,
-          onReady: () => { setSdkReady(true); setLoading(false); },
-          onChange: (state: CardValidationState) => setValidationState(state),
-          onSuccess: () => {
-            // Payment completion handled by PARENT via polling.
-            // Do NOT add payment-result logic here.
-          },
-          onError: (err: PravaError) => { setError(err.message); onError?.(err); },
-        });
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Unknown error';
-      setError(msg);
-      onError?.(err instanceof Error ? err : new Error(msg));
-      setLoading(false);
-    }
-  }, [session, onError]);
-
-  // CRITICAL: Mount with Strict Mode handling
-  useEffect(() => {
-    if (!hasStarted.current) {
-      hasStarted.current = true;
-      mountSdk();
-    }
-    return () => {
-      sdkRef.current?.destroy();
-      sdkRef.current = null;
-      hasStarted.current = false; // ← Reset so remount re-initializes
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // CRITICAL: Fallback for onReady not firing.
-  // MutationObserver detects iframe + 5s hard timeout.
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || sdkReady) return;
-
-    const hideLoading = () => { setSdkReady(true); setLoading(false); };
-
-    const observer = new MutationObserver(() => {
-      if (container.querySelector('iframe')) hideLoading();
-    });
-    observer.observe(container, { childList: true, subtree: true });
-
-    const timeout = setTimeout(() => setLoading(false), 5000);
-
-    return () => { observer.disconnect(); clearTimeout(timeout); };
-  }, [sdkReady]);
-
-  // ── ADAPT all rendering below to the user's design system ──
-  return (
-    <div>
-      {error && (
-        <div role="alert">
-          <p>Error: {error}</p>
-          <button onClick={mountSdk}>Try Again</button>
-        </div>
-      )}
-
-      {loading && !sdkReady && !error && <div>Loading secure card form…</div>}
-
-      {validationState && sdkReady && (
-        <div>
-          <span>{validationState.cardNumber.isValid ? '✓' : '○'} Card Number</span>
-          <span>{validationState.expiry.isValid ? '✓' : '○'} Expiry</span>
-          <span>{validationState.cvv.isValid ? '✓' : '○'} CVV</span>
-          {validationState.isComplete && <span>All fields valid ✓</span>}
-        </div>
-      )}
-
-      {/* REQUIRED: iframe mounts here. Min ~400px height, overflow hidden. */}
-      <div ref={containerRef} id="prava-card-form" style={{ minHeight: '400px', overflow: 'hidden' }} />
-    </div>
-  );
-}
+// Start the iframe, but do not use this Promise/callback as payment success.
+// Current iframe completion is determined by the server lifecycle below.
+void prava.collectPAN({
+  sessionToken: session.session_token,
+  iframeUrl: session.iframe_url,
+  container: '#prava-card-form',
+  onReady: () => setReady(true),
+  onChange: (state) => setValidation(state),
+}).catch((error) => showError(error.message));
 ```
 
-### Next.js: Page Integration (`src/app/checkout/page.tsx`)
+Current iframe builds emit enrollment/transaction lifecycle events but not the legacy `PRAVA_SUCCESS` event that resolves `collectPAN()` and triggers `onSuccess`. Do not await that Promise or gate UI/payment state on `onSuccess`; use `onReady` for mount state and the sanitized server poll for payment state. Destroy the SDK on unmount. In React Strict Mode, reset the mount guard in cleanup so the development remount can initialize again. Preserve the returned `iframe_url`; the SDK appends only the parent origin.
 
-> **State machine:** `idle → loading → card-entry (+ polling) → completed | failed`
+#### Hosted/new-tab checkout
 
-```tsx
-'use client';
-
-import { useState, useEffect, useRef, useCallback } from 'react';
-import PravaCardForm from '@/components/PravaCardForm';
-import { createPravaSession, pollPaymentResult } from '@/app/actions';
-import type { SessionResponse, PaymentResultResponse, PaymentTransaction } from '@/app/actions';
-
-export default function CheckoutPage() {
-  const [session, setSession] = useState<SessionResponse | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [paymentResult, setPaymentResult] = useState<PaymentResultResponse | null>(null);
-  const [polling, setPolling] = useState(false);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const isIdle = !session && !paymentResult && !loading;
-  const isCardEntry = !!session && !paymentResult;
-  const isCompleted = paymentResult?.status === 'completed';
-  const isFailed = paymentResult?.status === 'failed';
-  const completedTxn = isCompleted ? paymentResult.transactions[0] ?? null : null;
-  const completedLineItem = completedTxn?.line_items?.[0] ?? null;
-
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) { clearInterval(pollingRef.current); pollingRef.current = null; }
-    setPolling(false);
-  }, []);
-
-  const startPolling = (sessionId: string) => {
-    setPolling(true);
-    const doPoll = async () => {
-      try {
-        const result = await pollPaymentResult(sessionId);
-        if (result.status === 'completed' || result.status === 'failed') {
-          setPaymentResult(result);
-          stopPolling();
-        }
-      } catch { /* Keep polling on transient errors */ }
-    };
-    doPoll();
-    pollingRef.current = setInterval(doPoll, 3000);
-  };
-
-  const handleCheckout = async () => {
-    setLoading(true); setError(null); setPaymentResult(null);
-    try {
-      // ADAPT: Get userId/userEmail from your auth system, totalAmount from your cart/product
-      const s = await createPravaSession({
-        userId: 'user_123',            // ← Replace with your auth context
-        userEmail: 'user@example.com', // ← Replace with your auth context
-        totalAmount: '49.99',          // ← Replace with your product/cart
-        currency: 'USD',
-      });
-      setSession(s);
-      startPolling(s.session_id);
-      // For new-tab approach: window.open(s.iframe_url, '_blank');
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to start checkout');
-    } finally { setLoading(false); }
-  };
-
-  const handleReset = () => { stopPolling(); setSession(null); setPaymentResult(null); setError(null); };
-
-  useEffect(() => { return () => { if (pollingRef.current) clearInterval(pollingRef.current); }; }, []);
-
-  // ── ADAPT all rendering below to the user's design system ──
-  return (
-    <div>
-      {error && <div role="alert"><p>{error}</p></div>}
-
-      {isIdle && (
-        <button onClick={handleCheckout} disabled={loading}>
-          {loading ? 'Creating session…' : 'Pay'}
-        </button>
-      )}
-
-      {isCardEntry && session && (
-        <div>
-          <PravaCardForm session={session} onError={(err) => setError(err.message)} />
-          {polling && <p>Waiting for payment completion…</p>}
-          <button onClick={handleReset}>Cancel</button>
-        </div>
-      )}
-
-      {isCompleted && completedLineItem && (
-        <div>
-          <h2>Payment Complete</h2>
-          <p>Network Token: {completedLineItem.token}</p>
-          <p>Dynamic CVV: {completedLineItem.dynamic_cvv}</p>
-          <p>Expiry: {completedLineItem.expiry_month}/{completedLineItem.expiry_year}</p>
-          <button onClick={handleReset}>New Checkout</button>
-        </div>
-      )}
-
-      {isFailed && (
-        <div>
-          <h2>Payment Failed</h2>
-          <p>{paymentResult?.transactions[0]?.error?.message || 'Unknown error'}</p>
-          <button onClick={handleReset}>Try Again</button>
-        </div>
-      )}
-    </div>
-  );
-}
-```
-
-### Express.js: Session Route (`routes/prava-session.ts`)
+Create the session with `integration_type: "full_checkout"`. The SDK is unnecessary:
 
 ```typescript
-import { Router, Request, Response } from 'express';
+window.open(session.iframe_url, '_blank', 'noopener,noreferrer');
+```
 
-const router = Router();
-// Falls back to sandbox — set PRAVA_BACKEND_URL=https://api.prava.space for production
-const BACKEND_URL = process.env.PRAVA_BACKEND_URL || 'https://sandbox.api.prava.space';
-const MERCHANT_SECRET_KEY = process.env.MERCHANT_SECRET_KEY;
+Do not add a token query parameter. The returned URL already carries the opaque session ID.
 
-// POST /api/prava/create-session
-router.post('/create-session', async (req: Request, res: Response) => {
-  try {
-    if (!MERCHANT_SECRET_KEY || MERCHANT_SECRET_KEY.includes('YOUR_SECRET_KEY')) {
-      return res.status(500).json({ error: 'MERCHANT_SECRET_KEY not configured.' });
+### 5. Poll and settle on the server
+
+The merchant payment-result state machine for an immediate custom checkout (not quote mode and not authorize-only mandate setup) is:
+
+```text
+pending | processing
+        ↓
+awaiting_result  (custom checkout credential is ready)
+        ↓  charge through your processor, then report the real result
+completed | failed
+```
+
+For custom checkout, poll until a complete credential-bearing line item appears at `awaiting_result`:
+
+```typescript
+type PaymentStatus =
+  | 'pending'
+  | 'processing'
+  | 'awaiting_result'
+  | 'completed'
+  | 'failed';
+
+async function waitForCustomCredential(sessionId: string) {
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const response = await fetch(
+      `${PRAVA_BACKEND_URL}/v1/sessions/${encodeURIComponent(sessionId)}/payment-result?_t=${Date.now()}`,
+      {
+        headers: { Authorization: `Bearer ${MERCHANT_SECRET_KEY}` },
+        cache: 'no-store',
+      },
+    );
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error?.message ?? `Payment poll failed (${response.status})`);
+    }
+    if (result.status === 'failed') {
+      throw new Error(
+        result.error?.message ??
+        result.transactions?.[0]?.error?.message ??
+        'Payment failed',
+      );
+    }
+    if (result.status === 'awaiting_result') {
+      const lineItem = result.transactions
+        ?.flatMap((transaction: { line_items?: unknown[] }) => transaction.line_items ?? [])
+        .find((item: any) =>
+          item.token && item.dynamic_cvv && item.expiry_month && item.expiry_year,
+        );
+      if (lineItem) return lineItem;
+    }
+    if (result.status === 'completed') {
+      return null; // already settled; do not charge the credential again
     }
 
-    const { userId, userEmail, totalAmount = '99.99', currency = 'USD', description } = req.body;
-    if (!userId || !userEmail) {
-      return res.status(400).json({ error: 'userId and userEmail are required' });
-    }
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+  }
+  throw new Error('Timed out waiting for a payment credential');
+}
+```
 
-    const response = await fetch(`${BACKEND_URL}/v1/sessions`, {
+Use the returned `token`, `dynamic_cvv`, `expiry_month`, and `expiry_year` only inside the trusted payment process. Before calling the processor, atomically create or acquire a durable payment-attempt record keyed by `txn_ref_id`, and pass a stable key derived from `txn_ref_id` through the processor's idempotency mechanism. Persist the processor request/reference and result. If a worker crashes after authorization but before `report-status`, a retry must query or repeat the **same idempotent processor operation** and report its stored outcome; it must not submit a new charge. An in-memory lock is insufficient.
+
+Then report what the processor actually returned:
+
+```typescript
+async function reportPaymentOutcome(args: {
+  sessionId: string;
+  txnRefId: string;
+  approved: boolean;
+  authorizationCode?: string;
+  responseCode?: string;
+  amountPaid?: string;
+}) {
+  const response = await fetch(
+    `${PRAVA_BACKEND_URL}/v1/sessions/${encodeURIComponent(args.sessionId)}/report-status`,
+    {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MERCHANT_SECRET_KEY}`,
+        Authorization: `Bearer ${MERCHANT_SECRET_KEY}`,
       },
       body: JSON.stringify({
-        user_id: userId,
-        user_email: userEmail,
-        total_amount: totalAmount,
-        currency,
-        description: description || 'Purchase',
-        purchase_context: [{
-          merchant_details: {
-            // The DESTINATION merchant — the real store the user is buying from, NOT your app
-            name: 'Zara',                       // ← Real merchant the user buys from (e.g. Zara)
-            url: 'https://www.zara.com',        // ← That merchant's real URL
-            country_code_iso2: 'US',            // ← Replace
-            category_code: '5651',              // ← Optional: that merchant's MCC (5651 = apparel)
-            category: 'Apparel',                // ← Optional: human-readable category
-          },
-          product_details: [{ description: description || 'Purchase', unit_price: totalAmount, quantity: 1 }],
-          effective_until_minutes: 15,
-        }],
+        txn_ref_id: args.txnRefId,
+        txn_status: args.approved ? 'APPROVED' : 'DECLINED',
+        ...(args.authorizationCode && { authorization_code: args.authorizationCode }),
+        ...(args.responseCode && { response_code: args.responseCode }),
+        ...(args.amountPaid && { amount_paid: args.amountPaid }),
       }),
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      return res.status(response.status).json({
-        error: errorData.error?.message || `Prava API error (HTTP ${response.status})`,
-      });
-    }
-
-    return res.json(await response.json());
-  } catch (error) {
-    console.error('[Prava] Failed to create session:', error);
-    return res.status(500).json({ error: 'Failed to create Prava session' });
+      cache: 'no-store',
+    },
+  );
+  const result = await response.json();
+  if (!response.ok) {
+    throw new Error(result.error?.message ?? `Report failed (${response.status})`);
   }
-});
-
-// GET /api/prava/payment-result/:sessionId
-router.get('/payment-result/:sessionId', async (req: Request, res: Response) => {
-  try {
-    if (!MERCHANT_SECRET_KEY) return res.status(500).json({ error: 'MERCHANT_SECRET_KEY not configured.' });
-
-    const response = await fetch(
-      `${BACKEND_URL}/v1/sessions/${req.params.sessionId}/payment-result`,
-      { headers: { 'Authorization': `Bearer ${MERCHANT_SECRET_KEY}` } }
-    );
-
-    if (!response.ok) {
-      if (response.status === 404) return res.status(404).json({ error: 'Session not found' });
-      const errorData = await response.json().catch(() => ({}));
-      return res.status(response.status).json({
-        error: errorData.error?.message || `Prava API error (HTTP ${response.status})`,
-      });
-    }
-
-    return res.json(await response.json());
-  } catch (error) {
-    console.error('[Prava] Failed to get payment result:', error);
-    return res.status(500).json({ error: 'Failed to get payment result' });
-  }
-});
-
-// GET /api/prava/health
-router.get('/health', async (_req: Request, res: Response) => {
-  try {
-    const response = await fetch(`${BACKEND_URL}/health`);
-    return res.json({ healthy: response.ok, ...(await response.json()) });
-  } catch {
-    return res.json({ healthy: false });
-  }
-});
-
-export default router;
-// Mount: app.use('/api/prava', pravaRouter);
-```
-
-### Vanilla JS: Complete HTML Integration
-
-```html
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Prava Card Enrollment</title>
-</head>
-<body>
-  <div id="card-form" style="min-height: 420px;"></div>
-  <button id="start-btn" onclick="startFlow()">Add Payment Card</button>
-  <div id="status"></div>
-
-  <script type="module">
-    import { PravaSDK } from '@prava-sdk/core';
-
-    // In production, session creation MUST happen on your server.
-    const PUBLISHABLE_KEY = 'pk_test_YOUR_KEY';
-    const BACKEND_URL = 'https://sandbox.api.prava.space'; // production: https://api.prava.space
-    const SECRET_KEY = 'sk_test_YOUR_KEY'; // Server-side only in production!
-
-    let sdk = null;
-
-    window.startFlow = async function() {
-      document.getElementById('start-btn').style.display = 'none';
-      document.getElementById('status').textContent = 'Creating session…';
-
-      if (sdk) { sdk.destroy(); sdk = null; }
-
-      try {
-        // 1. Create session (move to server in production)
-        const res = await fetch(`${BACKEND_URL}/v1/sessions`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${SECRET_KEY}`,
-          },
-          body: JSON.stringify({
-            user_id: 'demo_user', user_email: 'demo@example.com',
-            total_amount: '49.99', currency: 'USD', description: 'Demo checkout',
-            purchase_context: [{
-              // Destination merchant — the real store the user buys from, NOT your app
-              merchant_details: { name: 'Zara', url: 'https://www.zara.com', country_code_iso2: 'US' },
-              product_details: [{ description: 'Test Product', unit_price: '49.99', quantity: 1 }],
-            }],
-          }),
-        });
-        const session = await res.json();
-
-        // 2. Mount iframe
-        sdk = new PravaSDK({ publishableKey: PUBLISHABLE_KEY });
-        await sdk.collectPAN({
-          sessionToken: session.session_token,
-          iframeUrl: session.iframe_url,
-          container: '#card-form',
-          onReady: () => { document.getElementById('status').textContent = ''; },
-          onSuccess: (result) => {
-            document.getElementById('status').textContent =
-              `Card enrolled: ${result.brand} ****${result.last4}`;
-          },
-          onError: (err) => {
-            document.getElementById('status').textContent = `Error: ${err.message}`;
-          },
-        });
-
-        // Alternative: new tab approach
-        // window.open(session.iframe_url, '_blank');
-      } catch (err) {
-        document.getElementById('status').textContent = `Error: ${err.message}`;
-        document.getElementById('start-btn').style.display = 'block';
-      }
-    };
-  </script>
-</body>
-</html>
-```
-
----
-
-## Sandbox & Testing
-
-| Item | Value |
-|------|-------|
-| **Sandbox Backend** | `https://sandbox.api.prava.space` |
-| **Production Backend** | `https://api.prava.space` |
-| **Secret Key format** | `sk_test_xxx` (sandbox) / `sk_live_xxx` (production) |
-| **Publishable Key format** | `pk_test_xxx` (sandbox) / `pk_live_xxx` (production) |
-| **Test Cards** | Provided by Prava team during onboarding |
-| **Test OTP (device binding)** | `456789` — sandbox one-time code for the first-run OTP screen |
-| **Health Check** | `curl https://sandbox.api.prava.space/health` |
-| **Passkey requirements** | HTTPS (or localhost) + WebAuthn browser (Chrome 80+, Safari 14+, Firefox 80+, Edge 80+) + biometric hardware |
-
-**Supported currencies:** Any valid ISO 4217 3-letter code — `USD`, `EUR`, `GBP`, `INR`, `CAD`, `AUD`, `JPY`, etc.
-
----
-
-## Error Responses
-
-All errors return JSON with an error object and appropriate HTTP status.
-
-**Session creation errors:**
-
-| Status | Code | Meaning |
-|--------|------|---------|
-| 400 | `VAL_2001` | Invalid request body — check `details.fieldErrors` for specific fields |
-| 401 | `AUTH_1001` | Invalid API key |
-| 401 | `AUTH_1002` | Missing or invalid Authorization header |
-| 500 | `SESSION_CREATE_ERROR` | Failed to create session (transient, retry) |
-
-**Payment result errors:**
-
-| Status | Meaning |
-|--------|---------|
-| 401 | Invalid or missing secret key |
-| 404 | Session not found |
-
-**Error response format:**
-
-```json
-{
-  "error": {
-    "code": "AUTH_1001",
-    "message": "Invalid API key",
-    "details": {}
-  }
+  return result;
 }
 ```
 
----
+Return only a sanitized status to the browser. Never return the token, dynamic CVV, full payment-result body, or processor authorization data to a client component.
 
-## Troubleshooting
+For quote checkout, Prava owns the merchant checkout and suppresses credentials. Continue polling through `pending`/`processing`; treat top-level `completed` or `failed` as terminal. `transactions` may be empty, and failure may live in top-level `error`. Do not wait for or expose a credential-bearing `awaiting_result` response in quote mode.
 
-| Issue | Fix |
-|-------|-----|
-| `publishableKey must start with "pk_"` | Using secret key on frontend — use publishable key instead |
-| `401 Invalid API key` on session creation | Check secret key starts with `sk_test_`/`sk_live_` and `Authorization: Bearer` header is correct |
-| Iframe not loading | Verify `iframe_url` from session response; check browser console |
-| `MERCHANT_SECRET_KEY not configured` | Add to `.env.local` (Next.js) or `.env` — server-side only |
-| Session expired | Sessions last ~15 min. Create a new one |
-| "Authentication Failed" on the checkout page | Usually an expired session (15-min TTL), not an auth problem — create a fresh session before debugging keys or passkeys |
-| Unexpected OTP screen during card entry | Device binding on a new browser/device — in sandbox, enter `456789` |
-| Passkey prompt missing | Ensure HTTPS (or localhost) + supported browser + biometric hardware |
-| Polling returns `pending` forever | Using `session_id` (not `session_token`) in URL? Using secret key (not session_token) as Bearer? |
-| Next.js stale polling responses | Add `?_t=${Date.now()}` + `cache: 'no-store'` + `next: { revalidate: 0 }` |
-| React double-mount breaks SDK | Use `hasStarted` ref that resets to `false` in cleanup |
+For `mandate_setup.intent: "mandate_setup"`, do not use this Session API polling path at all. Complete the authorization flow, persist the resulting mandate server-side, and use the mandate charge/report lifecycle for later purchases.
 
----
+### 6. Test in sandbox
 
-## Security Checklist
+- Use `https://sandbox.api.prava.space` with `pk_test_*` and `sk_test_*` keys.
+- Use only the network test card assigned by Prava onboarding.
+- A first run on a new browser/device can include device-binding OTP before passkey registration; use the sandbox OTP documented for the account (the standard sandbox code is `456789`).
+- Passkeys require HTTPS or localhost and a WebAuthn-capable browser/device.
+- Sessions normally expire after about 15 minutes. Create a new session after expiry.
 
-Before going live, verify:
+## Framework templates
 
-- [ ] `MERCHANT_SECRET_KEY` is ONLY used server-side (never in client bundles)
-- [ ] `publishableKey` is the only key used client-side
-- [ ] Session creation happens on your server, not from the browser
-- [ ] Using HTTPS in production
-- [ ] CORS is properly configured on your server
-- [ ] Session response is validated before use
-- [ ] Polling uses `session_id` + secret key (not session_token)
+- Next.js server/session logic: `templates/nextjs/server-action.ts`
+- Next.js SDK mount: `templates/nextjs/card-form-component.tsx`
+- Next.js page/state example: `templates/nextjs/page-integration.tsx`
+- Express server routes: `templates/express/session-route.ts`
+- Vanilla browser half: `templates/vanilla/integration.html` (pair it with a server route and an ESM-aware bundler/import map; it contains no secret key)
 
----
+When adapting a template, preserve the contract and security boundaries while replacing its demo user, order, merchant, processor, layout, and error presentation with the application's real implementations.
+
+## Common failures
+
+| Symptom | Check |
+|---|---|
+| `400 VAL_2001` on `purchase_context` | The current wire shape is `{ custom: [...] }` or `{ quote: true, quote_id }`; a bare array is invalid. |
+| Embedded flow looks like a hosted checkout | Create the session with `integration_type: "embedding"`. |
+| `401` while polling | Use `session_id` in the path and the merchant secret key as Bearer auth, server-side. |
+| Poll remains `pending` in Next.js | Add a timestamp query, `cache: 'no-store'`, and `next: { revalidate: 0 }`. |
+| Poll reaches `awaiting_result` but never `completed` | The credential is ready; charge it and call `report-status`. |
+| A worker retry can charge twice | Atomically claim `txn_ref_id` in durable storage and reuse it as the processor idempotency anchor before touching the credential. |
+| Iframe preview returns `404` | Pass `iframe_url` verbatim. Do not replace its `ses_...` query value with the JWT. |
+| React development remount breaks the iframe | Reset the Strict Mode mount guard and destroy the SDK in cleanup. |
+| Loading spinner never clears | Keep `onReady`, plus an iframe `MutationObserver` and bounded fallback timeout. |
+| `collectPAN()` / `onSuccess` never finishes | Current iframe builds do not emit the legacy `PRAVA_SUCCESS` event. Start `collectPAN()` without awaiting it, catch errors, and use authenticated server polling as the payment authority. |
+| Quote completion has no transaction rows | This is valid; use top-level status/error and `shop_pay`. |
+| Mandate setup polling never reaches `awaiting_result` | Authorize-only setup emits no credential; use the later `/v1/mandates/{id}/charge` and charge-report lifecycle. |
+| Merchant URL or user email is rejected late | Use a public HTTPS ICANN merchant origin and a routable email domain when creating the session. |
+| Cancel hides the UI but checkout still works | Authorize ownership and call the server-side session revoke endpoint before offering a fresh attempt. |
+
+## Security checklist
+
+- [ ] Merchant secret key exists only in a server secret store/environment.
+- [ ] The application server authenticates the caller and derives user/order data from trusted state.
+- [ ] Every browser-facing status request is authorized against a durable session/user ownership record.
+- [ ] Only the publishable key, session token, and verbatim iframe URL reach the iframe host page.
+- [ ] Payment-result polling, credential use, and report-status happen server-side.
+- [ ] Token, dynamic CVV, session JWT, and quote access grant are absent from browser rendering and logs.
+- [ ] Custom checkout stops on credential-ready `awaiting_result`, not only `completed`.
+- [ ] Each `txn_ref_id` has a durable processor attempt/claim and a stable processor idempotency key.
+- [ ] Every attempted custom charge reports its real `APPROVED` or `DECLINED` result.
+- [ ] Quote completion handles empty `transactions` and top-level errors.
+- [ ] Authorize-only mandate setup is not sent through the immediate custom credential/report loop.
+- [ ] Active sessions are revoked server-side on explicit Cancel before local state is reset.
+- [ ] Production uses HTTPS and environment-matched live keys/URLs.
 
 *Built by [Prava Payments](https://prava.space) — the payment stack for AI agents.*

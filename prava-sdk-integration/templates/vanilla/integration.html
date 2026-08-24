@@ -111,6 +111,7 @@
   <div class="container">
     <h1>Checkout</h1>
     <p class="subtitle">Securely add your card to complete the purchase.</p>
+    <p id="payment-status" aria-live="polite" style="margin-bottom: 16px; color: #64748b;"></p>
 
     <!-- Approach Selector -->
     <div class="approach-tabs">
@@ -136,10 +137,9 @@
         </div>
         <div id="prava-iframe-container"></div>
         <div id="success-state" class="success" style="display: none;">
-          <h2>✓ Card Enrolled</h2>
-          <p class="card-info" id="success-card"></p>
-          <p class="enrollment-id" id="success-enrollment"></p>
-          <button class="btn btn-secondary" onclick="resetForm()">Enroll Another Card</button>
+          <h2>✓ Payment Confirmed</h2>
+          <p>The server confirmed the processor outcome.</p>
+          <button class="btn btn-secondary" onclick="resetForm()">Start Another Checkout</button>
         </div>
         <button class="btn" id="start-btn" onclick="startEmbeddedFlow()">
           Add Payment Card
@@ -161,19 +161,26 @@
     </div>
   </div>
 
-  <!-- Load PravaSDK -->
-  <!-- In production, install via npm: npm install @prava-sdk/core -->
-  <!-- For this demo, we import from the CDN or local build -->
+  <!-- Install `@prava-sdk/core` and serve this file through an ESM-aware bundler
+       such as Vite, Parcel, or esbuild. A bare npm specifier does not run when
+       this HTML is opened directly from disk without a bundler/import map. -->
   <script type="module">
     import { PravaSDK } from '@prava-sdk/core';
 
     // ── Configuration ────────────────────────────────────
-    // Replace these with your actual credentials
+    // The browser receives only the publishable key. Session creation, payment
+    // credential handling, and report-status all stay on your server.
     const PUBLISHABLE_KEY = 'pk_test_YOUR_PUBLISHABLE_KEY_HERE';
-    const BACKEND_URL = 'https://sandbox.api.prava.space'; // production: https://api.prava.space
-    const SECRET_KEY = 'sk_test_YOUR_SECRET_KEY_HERE'; // ⚠️ In production, session creation MUST happen on your server!
+    const CREATE_SESSION_PATH = '/api/prava/create-session';
+    const PAYMENT_STATUS_PATH = '/api/prava/payment-status';
+    const POLL_INTERVAL_MS = 3000;
+    const POLL_TIMEOUT_MS = 15 * 60 * 1000;
+    const MAX_POLL_ATTEMPTS = 300;
+    const MAX_CONSECUTIVE_POLL_ERRORS = 3;
 
     let sdkInstance = null;
+    let pollingTimeout = null;
+    let pollingRun = 0;
 
     // ── Approach Selector ────────────────────────────────
     window.selectApproach = function(approach) {
@@ -183,40 +190,20 @@
       document.getElementById('tab-newtab').classList.toggle('active', approach === 'newtab');
     };
 
-    // ── Create Session (SERVER-SIDE IN PRODUCTION!) ──────
-    // ⚠️ WARNING: In a real app, this MUST happen on your server.
-    // The secret key should NEVER be in client-side code.
-    // This is only for demo/testing purposes.
-    async function createSession() {
-      const res = await fetch(`${BACKEND_URL}/v1/sessions`, {
+    // ── Same-Origin Server API ───────────────────────────
+    // Implement these routes on your server (see the Express/Next.js templates).
+    // Never put a Prava secret key or call Prava's backend directly from here.
+    async function createSession(integrationType) {
+      const res = await fetch(CREATE_SESSION_PATH, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${SECRET_KEY}`,
         },
         body: JSON.stringify({
-          user_id: 'demo_user_001',
-          user_email: 'demo@example.com',
-          total_amount: '49.99',
-          currency: 'USD',
-          description: 'Demo checkout',
-          purchase_context: [{
-            merchant_details: {
-              // The DESTINATION merchant — the real store the user is buying from, NOT your app.
-              // Example uses a real merchant; replace with the actual merchant of this purchase.
-              name: 'Zara',
-              url: 'https://www.zara.com',
-              country_code_iso2: 'US',
-              category_code: '5651',
-              category: 'Apparel',
-            },
-            product_details: [{
-              description: 'Test Product',
-              unit_price: '49.99',
-              quantity: 1,
-            }],
-            effective_until_minutes: 15,
-          }],
+          // The server authenticates the user and resolves this opaque reference
+          // to trusted amount/currency/merchant/product data.
+          checkoutRef: 'demo-purchase',
+          integrationType,
         }),
       });
 
@@ -226,6 +213,76 @@
       }
 
       return res.json();
+    }
+
+    function stopPaymentStatusPolling() {
+      pollingRun += 1;
+      if (pollingTimeout) clearTimeout(pollingTimeout);
+      pollingTimeout = null;
+    }
+
+    function startPaymentStatusPolling(sessionId) {
+      stopPaymentStatusPolling();
+      const activeRun = pollingRun;
+      const statusElement = document.getElementById('payment-status');
+      const deadline = Date.now() + POLL_TIMEOUT_MS;
+      let attempts = 0;
+      let consecutiveErrors = 0;
+
+      const poll = async () => {
+        attempts += 1;
+        if (attempts > MAX_POLL_ATTEMPTS || Date.now() >= deadline) {
+          statusElement.textContent = 'Timed out waiting for payment status. Start a new checkout session.';
+          stopPaymentStatusPolling();
+          return;
+        }
+
+        try {
+          const res = await fetch(
+            `${PAYMENT_STATUS_PATH}/${encodeURIComponent(sessionId)}?_t=${Date.now()}`,
+            { cache: 'no-store' }
+          );
+          const data = await res.json().catch(() => ({}));
+          if (activeRun !== pollingRun) return;
+          if (!res.ok) throw new Error(data.error?.message || data.error || `HTTP ${res.status}`);
+          consecutiveErrors = 0;
+
+          if (data.status === 'completed') {
+            statusElement.textContent = 'Payment approved and confirmed.';
+            if (document.getElementById('approach-embed').style.display !== 'none') {
+              document.getElementById('validation-state').style.display = 'none';
+              document.getElementById('prava-iframe-container').style.display = 'none';
+              document.getElementById('success-state').style.display = 'block';
+            }
+            stopPaymentStatusPolling();
+            return;
+          }
+          if (data.status === 'failed') {
+            statusElement.textContent = `Payment failed: ${data.error?.message || 'Unknown error'}`;
+            stopPaymentStatusPolling();
+            return;
+          }
+          if (data.status === 'awaiting_result' && data.credential_ready) {
+            statusElement.textContent =
+              'Payment credential is ready for the server’s idempotent processor workflow.';
+          } else {
+            statusElement.textContent = 'Payment is processing securely…';
+          }
+        } catch (error) {
+          if (activeRun !== pollingRun) return;
+          consecutiveErrors += 1;
+          statusElement.textContent = `Unable to refresh payment status: ${error.message || 'Unknown error'}`;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_POLL_ERRORS) {
+            stopPaymentStatusPolling();
+            return;
+          }
+        }
+
+        // pending | processing | awaiting_result are non-terminal.
+        if (activeRun === pollingRun) pollingTimeout = setTimeout(poll, POLL_INTERVAL_MS);
+      };
+
+      void poll();
     }
 
     // ── Approach A: Embedded Iframe ──────────────────────
@@ -251,13 +308,16 @@
 
       try {
         // 1. Create session
-        const session = await createSession();
+        const session = await createSession('embedding');
+        startPaymentStatusPolling(session.session_id);
 
         // 2. Initialize SDK
         sdkInstance = new PravaSDK({ publishableKey: PUBLISHABLE_KEY });
 
-        // 3. Collect card
-        await sdkInstance.collectPAN({
+        // 3. Mount card collection. Do not await this Promise or depend on
+        // onSuccess: current iframes emit enrollment/transaction lifecycle
+        // events instead of the legacy PRAVA_SUCCESS event that resolves it.
+        void sdkInstance.collectPAN({
           sessionToken: session.session_token,
           iframeUrl: session.iframe_url,
           container: container,
@@ -273,18 +333,11 @@
             document.getElementById('val-cvv').className = state.cvv.isValid ? 'valid' : '';
             document.getElementById('val-cvv').textContent = (state.cvv.isValid ? '✓' : '○') + ' CVV';
           },
-          onSuccess: (result) => {
-            validationState.style.display = 'none';
-            container.style.display = 'none';
-            successState.style.display = 'block';
-            document.getElementById('success-card').textContent = `${result.brand} •••• ${result.last4}`;
-            document.getElementById('success-enrollment').textContent = `Enrollment: ${result.enrollmentId}`;
-          },
-          onError: (error) => {
-            errorBanner.textContent = '⚠ ' + error.message;
-            errorBanner.style.display = 'block';
-            loadingIndicator.style.display = 'none';
-          },
+        }).catch((error) => {
+          errorBanner.textContent = '⚠ ' + error.message;
+          errorBanner.style.display = 'block';
+          loadingIndicator.style.display = 'none';
+          startBtn.style.display = 'block';
         });
       } catch (error) {
         errorBanner.textContent = '⚠ ' + (error.message || 'Unknown error');
@@ -297,16 +350,23 @@
     // ── Approach B: New Tab ──────────────────────────────
     window.startNewTabFlow = async function() {
       const btn = document.getElementById('newtab-btn');
+      // Open synchronously from the click; opening only after await createSession()
+      // is commonly blocked by browsers as an unsolicited popup.
+      const checkoutWindow = window.open('about:blank', '_blank');
+      if (checkoutWindow) checkoutWindow.opener = null;
       btn.disabled = true;
       btn.textContent = 'Starting checkout…';
 
       try {
-        const session = await createSession();
+        if (!checkoutWindow) throw new Error('Allow popups to open secure checkout.');
+        const session = await createSession('full_checkout');
+        startPaymentStatusPolling(session.session_id);
 
-        // Open in new tab — user completes flow there
-        // iframe_url already contains the session token
-        window.open(session.iframe_url, '_blank');
+        // Open the backend-provided iframe_url verbatim. Its `session` query
+        // parameter is a session ID; do not rebuild it or substitute a JWT.
+        checkoutWindow.location.replace(session.iframe_url);
       } catch (error) {
+        checkoutWindow?.close();
         alert('Failed to start checkout: ' + (error.message || 'Unknown error'));
       } finally {
         btn.disabled = false;
@@ -320,6 +380,8 @@
         sdkInstance.destroy();
         sdkInstance = null;
       }
+      stopPaymentStatusPolling();
+      document.getElementById('payment-status').textContent = '';
       document.getElementById('success-state').style.display = 'none';
       document.getElementById('prava-iframe-container').style.display = 'block';
       document.getElementById('start-btn').style.display = 'block';
