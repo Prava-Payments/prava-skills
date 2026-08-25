@@ -15,7 +15,7 @@ the skills do and the controls that bound them. If you find a vulnerability, ema
 - **A human approves every payment with a passkey** (Face ID / Touch ID / Windows Hello) in their
   own browser. The agent cannot self-approve.
 - **The skills add a second, in-conversation confirmation** before minting any session: the agent
-  must state the merchant and total and get an explicit "yes" first (`prava-pay` step 2.5 /
+  must state the merchant and total and get an explicit "yes" first (`prava-pay` step 3 /
   `prava-shopping` step 4). This catches a wrong merchant or mis-typed amount before it reaches the
   passkey prompt.
 
