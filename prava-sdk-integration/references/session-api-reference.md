@@ -317,7 +317,7 @@ Retry with the returned canonical amount and currency. Unknown, expired, unautho
 
 ### `GET /v1/sessions/{session_id}/payment-result`
 
-Returns the session lifecycle. For an ordinary **custom-mode checkout**, this endpoint exposes the one-time payment credential when the top-level status reaches `awaiting_result`. In **quote mode**, Core owns merchant checkout, suppresses credentials, and returns terminal state through the top-level status and `shop_pay`. Authorize-only `mandate_setup` is excluded: it produces no session credential, so do not poll this endpoint waiting for `awaiting_result`.
+Returns the session lifecycle and the card bound to each transaction as `transactions[].card_id`. For an ordinary **custom-mode checkout**, this endpoint exposes the one-time payment credential when the top-level status reaches `awaiting_result`. In **quote mode**, Core owns merchant checkout, suppresses credentials, returns credential-free transaction summaries, and exposes merchant lifecycle context through optional `merchant_res`. Authorize-only `mandate_setup` is excluded: it produces no session credential, so do not poll this endpoint waiting for `awaiting_result`.
 
 ### Authentication
 
@@ -343,6 +343,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
   "transactions": [
     {
       "txn_id": "txn_01KKW...",
+      "card_id": "card_01KKW...",
       "status": "awaiting_result",
       "line_items": [
         {
@@ -367,8 +368,7 @@ Authorization: Bearer {MERCHANT_SECRET_KEY}
         }
       ]
     }
-  ],
-  "shop_pay": null
+  ]
 }
 ```
 
@@ -376,15 +376,21 @@ This is the actionable state for an ordinary custom checkout: charge the complet
 
 ### Quote-Mode Terminal Responses (200)
 
-Quote-backed checkout never returns token/CVV rows while Core owns checkout. A successful merchant checkout can therefore complete with an empty `transactions` array:
+Quote-backed checkout never returns token/CVV rows while Core owns checkout. Once a transaction exists, the result contains its credential-free summary and transaction-bound card ID:
 
 ```json
 {
   "session_id": "ses_01KKW...",
   "order_id": "ord_01KKW...",
   "status": "completed",
-  "transactions": [],
-  "shop_pay": {
+  "transactions": [
+    {
+      "txn_id": "txn_01KKW...",
+      "card_id": "card_01KKW...",
+      "status": "awaiting_result"
+    }
+  ],
+  "merchant_res": {
     "status": "paid",
     "orderId": "shop_01KKW..."
   }
@@ -403,13 +409,13 @@ A quote failure uses a top-level error:
     "code": "MERCHANT_CHECKOUT_FAILED",
     "message": "The merchant could not complete the checkout."
   },
-  "shop_pay": {
+  "merchant_res": {
     "status": "failed"
   }
 }
 ```
 
-For quote mode, `shop_pay.status: "paid"` maps to top-level `completed`. `"failed"`, `"prepare_failed"`, and `"needs_human"` map to top-level `failed` with stable errors. `"pending"`, `"prepared"`, `"unknown"`, and other nonterminal merchant states never fabricate success; callers continue polling while the top-level status remains `pending` or `processing`.
+For quote mode, `merchant_res.status: "paid"` maps to top-level `completed`. `"failed"`, `"prepare_failed"`, and `"needs_human"` map to top-level `failed` with stable errors. `"pending"`, `"prepared"`, `"unknown"`, and other nonterminal merchant states never fabricate success; callers continue polling while the top-level status remains `pending` or `processing`. Treat `merchant_res.status` as a forward-compatible merchant lifecycle string rather than a closed enum.
 
 ### Response Fields
 
@@ -418,9 +424,9 @@ For quote mode, `shop_pay.status: "paid"` maps to top-level `completed`. `"faile
 | `session_id` | `string` | Session identifier |
 | `order_id` | `string \| null` | Order identifier |
 | `status` | `string` | `"pending"`, `"processing"`, `"awaiting_result"`, `"completed"`, or `"failed"` |
-| `transactions` | `array` | Custom-mode transaction rows; empty before a transaction exists and throughout quote-mode checkout |
+| `transactions` | `array` | Transaction rows; empty before a transaction exists. Quote rows are credential-free summaries |
 | `error` | `object \| undefined` | Top-level terminal error, especially for quote-backed checkout |
-| `shop_pay` | `object \| null` | Quote checkout state: `{ status, orderId?, code?, message? }`; `null` for custom mode |
+| `merchant_res` | `object \| undefined` | Quote merchant lifecycle: `{ status, orderId?, code?, message? }`; omitted for custom mode and when no context exists |
 
 ### Status Semantics
 
@@ -431,8 +437,8 @@ The custom-mode column below describes checkout sessions, not authorize-only `ma
 | `pending` | Nothing has started yet; continue polling | Quote checkout has not produced a transaction yet; continue polling |
 | `processing` | Transaction exists but credentials are not ready; continue polling | Merchant checkout is nonterminal; continue polling with credentials suppressed |
 | `awaiting_result` | Complete line-item credentials are actionable. Charge once, then report `APPROVED` or `DECLINED` | Not exposed while Core owns quote checkout |
-| `completed` | Processor outcome was already confirmed; may be observed on a retry after `report-status` | Merchant checkout succeeded; `transactions` may be empty |
-| `failed` | Terminal; inspect top-level `error` first, then transaction errors | Terminal; inspect top-level `error` and `shop_pay` |
+| `completed` | Processor outcome was already confirmed; may be observed on a retry after `report-status` | Merchant checkout succeeded; a transaction summary may still have raw status `awaiting_result` |
+| `failed` | Terminal; inspect top-level `error` first, then transaction errors | Terminal; inspect top-level `error` and `merchant_res` |
 
 Credential fields are nullable. Treat custom `awaiting_result` as actionable only when `token`, `dynamic_cvv`, `expiry_month`, and `expiry_year` are all non-null. If they are incomplete, do not charge; continue bounded polling or surface an integration error.
 
@@ -443,8 +449,7 @@ Before an order exists, the exact top-level shape is:
   "session_id": "ses_01KKW...",
   "order_id": null,
   "status": "pending",
-  "transactions": [],
-  "shop_pay": null
+  "transactions": []
 }
 ```
 
@@ -453,8 +458,9 @@ Before an order exists, the exact top-level shape is:
 | Field | Type | Description |
 |-------|------|-------------|
 | `txn_id` | `string` | Unique transaction identifier |
+| `card_id` | `string \| null` | Card actually bound to this transaction; source of truth whether preselected, selected, or newly entered |
 | `status` | `string` | Transaction lifecycle value; custom credentials are normally exposed when this is `"awaiting_result"` |
-| `line_items` | `array` | One entry per merchant in the purchase context |
+| `line_items` | `array \| undefined` | One entry per merchant for custom mode; omitted from quote-backed summaries |
 | `error` | `object \| undefined` | Present if `status` is `"failed"` — `{ code: string, message: string }` |
 
 ### Line Item Object
@@ -528,7 +534,7 @@ async function pollPaymentResult(
 }
 ```
 
-For quote mode, do not read `transactions[0]`: Core suppresses quote credentials and terminal responses can have `transactions: []`. For custom mode, do not send the credential to a processor until the trusted worker has atomically claimed `txn_ref_id` in durable storage and established a stable processor idempotency key. Persist the processor operation/reference and outcome. A retry after a crash must query or replay that same idempotent operation, then report the stored outcome; it must never create a second charge.
+For quote mode, use transaction summaries only for identity and lifecycle—especially `card_id`—and never expect `line_items` or credentials. The array is empty until a transaction exists. For custom mode, do not send the credential to a processor until the trusted worker has atomically claimed `txn_ref_id` in durable storage and established a stable processor idempotency key. Persist the processor operation/reference and outcome. A retry after a crash must query or replay that same idempotent operation, then report the stored outcome; it must never create a second charge.
 
 ### Error Responses
 

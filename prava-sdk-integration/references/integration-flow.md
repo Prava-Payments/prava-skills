@@ -227,22 +227,23 @@ Step 4A: Custom mode — charge and report
 
 Step 3B: Quote mode
 ├── Core owns merchant checkout; token/CVV are never returned
-├── Nonterminal state is "pending" or "processing" with transactions: []
-├── "completed" may also have transactions: []
-└── "failed" carries a top-level error; inspect shop_pay for merchant state
+├── transactions is empty until a transaction exists
+├── Existing transactions are summaries: { txn_id, card_id, status }
+├── card_id identifies the card actually bound to each transaction
+└── Read top-level status/error and optional merchant_res for checkout state
 ```
 
-Do not wait for `completed` before using a custom credential: `report-status` is what makes it completed. A crash between processor authorization and `report-status` must resume or query the same idempotent processor operation and report its stored outcome, never issue a new charge. Do not index `transactions[0]` in quote mode because credential suppression intentionally leaves that array empty.
+Do not wait for `completed` before using a custom credential: `report-status` is what makes it completed. A crash between processor authorization and `report-status` must resume or query the same idempotent processor operation and report its stored outcome, never issue a new charge. Quote transaction rows are credential-free summaries; use them for transaction/card identity, not payment credentials.
 
 ### Key Data
 
 | Step | Who | Data |
 |------|-----|------|
 | Poll request | Your server → Prava | `session_id` in URL, `MERCHANT_SECRET_KEY` in Bearer header |
-| Poll response (nonterminal) | Prava → Your server | `{ status: "pending" \| "processing", transactions: [...], shop_pay }` |
-| Custom credential ready | Prava → Your server | `{ status: "awaiting_result", transactions: [{ line_items: [{ txn_ref_id, token, dynamic_cvv, expiry_month, expiry_year }] }], shop_pay: null }` |
+| Poll response (nonterminal) | Prava → Your server | `{ status: "pending" \| "processing", transactions: [...], merchant_res? }` |
+| Custom credential ready | Prava → Your server | `{ status: "awaiting_result", transactions: [{ txn_id, card_id, line_items: [{ txn_ref_id, token, dynamic_cvv, expiry_month, expiry_year }] }] }` |
 | Report outcome | Your server → Prava | `POST /v1/sessions/{session_id}/report-status` with `{ txn_ref_id, txn_status }` — required, incl. `DECLINED` |
-| Quote terminal | Prava → Your server | `{ status: "completed" \| "failed", transactions: [], error?, shop_pay }` |
+| Quote terminal | Prava → Your server | `{ status: "completed" \| "failed", transactions: [{ txn_id, card_id, status }] or [], error?, merchant_res? }` |
 | Custom failed | Prava → Your server | Inspect top-level `error` first, then `transactions[].error` |
 
 ### Exact Report-Status Body
@@ -279,7 +280,7 @@ The reporting server must map its processor's real authorization result to `APPR
 | Waiting for custom `completed` before charging | Use complete credentials at `awaiting_result`, then report the outcome |
 | Retrying a processor charge after a worker crash | Claim `txn_ref_id` durably and reuse the same processor idempotency key/operation |
 | Polling `payment-result` for `mandate_setup` | Resolve/store the active mandate server-side, then use the mandate charge and charge-report routes later |
-| Reading quote `transactions[0]` | Use top-level `status`, `error`, and `shop_pay`; quote transactions may be empty |
+| Expecting quote credentials in `transactions` | Quote rows contain only `txn_id`, `card_id`, and `status`; use top-level `status`, `error`, and optional `merchant_res` for checkout outcome |
 | Clearing local state on Cancel | Verify ownership and revoke the active server session before offering a new attempt |
 
 ---

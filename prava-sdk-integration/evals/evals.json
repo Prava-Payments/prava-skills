@@ -297,6 +297,20 @@
         "Plan persists and reports the actual original processor outcome as APPROVED or DECLINED",
         "Plan never exposes the credential or lets browser code decide whether to retry"
       ]
+    },
+    {
+      "id": 21,
+      "prompt": "What does payment-result return for a quote-backed Prava checkout, and how do I find which card the customer actually used? I previously integrated shop_pay and assumed transactions was always empty.",
+      "expected_output": "Plan replaces shop_pay with optional merchant_res, reads the actual bound card from transactions[].card_id, and treats quote transaction rows as credential-free summaries. It allows transactions to be empty before a transaction exists and does not expect line_items, token, CVV, or expiry in quote mode.",
+      "files": [],
+      "expectations": [
+        "Plan identifies transactions[].card_id as the source of truth for the card actually bound to each transaction",
+        "Plan states that quote transaction rows contain txn_id, nullable card_id, and status but omit line_items and credentials",
+        "Plan allows transactions to be empty only while no transaction exists rather than claiming quote results are always empty",
+        "Plan uses merchant_res for optional merchant lifecycle context and does not use shop_pay",
+        "Plan states that merchant_res is omitted for non-quote or no-context results rather than returned as null",
+        "Plan uses top-level status and error as the normalized quote outcome and does not call session report-status for quote mode"
+      ]
     }
   ]
 }
