@@ -1,6 +1,6 @@
 ---
 name: prava-sdk-integration
-version: 1.2.0
+version: 1.2.1
 
 description: Integrate Prava's payment SDK into AI applications — create server-side payment sessions, embed or host the PCI-compliant checkout, retrieve one-time Visa credentials, and report real processor outcomes. For application integrations, not the Prava agent CLI.
 homepage: https://prava.space
@@ -373,7 +373,7 @@ async function reportPaymentOutcome(args: {
 
 Return only a sanitized status to the browser. Never return the token, dynamic CVV, full payment-result body, or processor authorization data to a client component.
 
-For quote checkout, Prava owns the merchant checkout and suppresses credentials. Continue polling through `pending`/`processing`; treat top-level `completed` or `failed` as terminal. `transactions` may be empty, and failure may live in top-level `error`. Do not wait for or expose a credential-bearing `awaiting_result` response in quote mode.
+For quote checkout, Prava owns the merchant checkout and suppresses credentials. Continue polling through `pending`/`processing`; treat top-level `completed` or `failed` as terminal. `transactions` is empty until a transaction exists, then contains credential-free `{ txn_id, card_id, status }` summaries. Read each summary's `card_id` as the card actually bound to that transaction. Merchant lifecycle context is exposed as `merchant_res` only when it exists; failure may also live in top-level `error`. Do not wait for or expose a credential-bearing `awaiting_result` response in quote mode.
 
 For `mandate_setup.intent: "mandate_setup"`, do not use this Session API polling path at all. Complete the authorization flow, persist the resulting mandate server-side, and use the mandate charge/report lifecycle for later purchases.
 
@@ -409,7 +409,7 @@ When adapting a template, preserve the contract and security boundaries while re
 | React development remount breaks the iframe | Reset the Strict Mode mount guard and destroy the SDK in cleanup. |
 | Loading spinner never clears | Keep `onReady`, plus an iframe `MutationObserver` and bounded fallback timeout. |
 | `collectPAN()` / `onSuccess` never finishes | Current iframe builds do not emit the legacy `PRAVA_SUCCESS` event. Start `collectPAN()` without awaiting it, catch errors, and use authenticated server polling as the payment authority. |
-| Quote completion has no transaction rows | This is valid; use top-level status/error and `shop_pay`. |
+| Quote result has no transaction rows | No transaction exists yet; use top-level status/error and optional `merchant_res`, then continue polling unless terminal. |
 | Mandate setup polling never reaches `awaiting_result` | Authorize-only setup emits no credential; use the later `/v1/mandates/{id}/charge` and charge-report lifecycle. |
 | Merchant URL or user email is rejected late | Use a public HTTPS ICANN merchant origin and a routable email domain when creating the session. |
 | Cancel hides the UI but checkout still works | Authorize ownership and call the server-side session revoke endpoint before offering a fresh attempt. |
@@ -425,7 +425,7 @@ When adapting a template, preserve the contract and security boundaries while re
 - [ ] Custom checkout stops on credential-ready `awaiting_result`, not only `completed`.
 - [ ] Each `txn_ref_id` has a durable processor attempt/claim and a stable processor idempotency key.
 - [ ] Every attempted custom charge reports its real `APPROVED` or `DECLINED` result.
-- [ ] Quote completion handles empty `transactions` and top-level errors.
+- [ ] Quote handling supports both empty pre-transaction results and credential-free transaction summaries with transaction-bound `card_id`.
 - [ ] Authorize-only mandate setup is not sent through the immediate custom credential/report loop.
 - [ ] Active sessions are revoked server-side on explicit Cancel before local state is reset.
 - [ ] Production uses HTTPS and environment-matched live keys/URLs.

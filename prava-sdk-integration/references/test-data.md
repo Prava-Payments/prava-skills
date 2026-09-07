@@ -177,7 +177,7 @@ curl -s "https://sandbox.api.prava.space/v1/sessions/ses_01KKW.../payment-result
 - `pending` / `processing`: continue bounded polling.
 - Custom `awaiting_result`: find a line item whose `token`, `dynamic_cvv`, `expiry_month`, and `expiry_year` are all non-null. Charge it once, then report the result.
 - Custom `completed`: already confirmed; do not wait for this state before charging.
-- Quote `completed` / `failed`: terminal, credentials remain suppressed, and `transactions` may be empty. Read top-level `error` and `shop_pay`.
+- Quote `completed` / `failed`: terminal and credentials remain suppressed. `transactions` is empty until a transaction exists; otherwise each row contains `txn_id`, transaction-bound `card_id`, and `status`. Read top-level `error` and optional `merchant_res` for checkout context.
 
 Minimal custom-flow report:
 

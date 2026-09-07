@@ -54,7 +54,7 @@ export interface PravaApiError {
   details?: Record<string, unknown>;
 }
 
-export interface ShopPayState {
+export interface MerchantResponseState {
   status: string;
   [key: string]: unknown;
 }
@@ -69,8 +69,10 @@ export type PaymentStatus =
 
 export interface PaymentTransaction {
   txn_id: string;
+  card_id: string | null;
   status: PaymentStatus;
-  line_items: PaymentLineItem[];
+  /** Omitted from credential-free quote-backed results. */
+  line_items?: PaymentLineItem[];
   error?: PravaApiError;
 }
 
@@ -78,10 +80,10 @@ export interface PaymentResultResponse {
   session_id: string;
   order_id: string | null;
   status: PaymentStatus;
-  /** Empty or omitted for quote-backed terminal results handled by Shop Pay. */
-  transactions?: PaymentTransaction[];
+  transactions: PaymentTransaction[];
   error?: PravaApiError;
-  shop_pay?: ShopPayState | null;
+  /** Present only when a quote-backed order has merchant lifecycle context. */
+  merchant_res?: MerchantResponseState;
 }
 
 export interface PaymentStatusResponse {
@@ -91,8 +93,8 @@ export interface PaymentStatusResponse {
   /** True only when a custom checkout has a complete one-time credential server-side. */
   credential_ready: boolean;
   error?: Pick<PravaApiError, 'code' | 'message'>;
-  /** Credential-free merchant checkout state only; the full shop_pay object stays server-side. */
-  shop_pay_status?: string;
+  /** Credential-free merchant checkout state only; the full object stays server-side. */
+  merchant_res_status?: string;
 }
 
 export interface PurchaseContextEntry {
@@ -335,13 +337,13 @@ export async function pollPaymentStatus(sessionId: string): Promise<PaymentStatu
   const credentialReady =
     result.status === 'awaiting_result' &&
     transactions.some((transaction) =>
-      transaction.line_items.some(
+      transaction.line_items?.some(
         (lineItem) =>
           Boolean(lineItem.token) &&
           Boolean(lineItem.dynamic_cvv) &&
           Boolean(lineItem.expiry_month) &&
           Boolean(lineItem.expiry_year)
-      )
+      ) ?? false
     );
   const safeError =
     result.error ?? transactions.find((transaction) => transaction.error)?.error;
@@ -354,7 +356,9 @@ export async function pollPaymentStatus(sessionId: string): Promise<PaymentStatu
     ...(safeError
       ? { error: { code: safeError.code, message: safeError.message } }
       : {}),
-    ...(result.shop_pay?.status ? { shop_pay_status: result.shop_pay.status } : {}),
+    ...(result.merchant_res?.status
+      ? { merchant_res_status: result.merchant_res.status }
+      : {}),
   };
 }
 

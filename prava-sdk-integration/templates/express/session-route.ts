@@ -36,7 +36,7 @@ interface PravaApiError {
   details?: Record<string, unknown>;
 }
 
-interface ShopPayState {
+interface MerchantResponseState {
   status: string;
   [key: string]: unknown;
 }
@@ -185,8 +185,10 @@ interface PaymentLineItem {
 
 interface PaymentTransaction {
   txn_id: string;
+  card_id: string | null;
   status: PaymentStatus;
-  line_items: PaymentLineItem[];
+  /** Omitted from credential-free quote-backed results. */
+  line_items?: PaymentLineItem[];
   error?: PravaApiError;
 }
 
@@ -194,10 +196,10 @@ export interface PaymentResultResponse {
   session_id: string;
   order_id: string | null;
   status: PaymentStatus;
-  /** Empty or omitted for quote-backed terminal results handled by Shop Pay. */
-  transactions?: PaymentTransaction[];
+  transactions: PaymentTransaction[];
   error?: PravaApiError;
-  shop_pay?: ShopPayState | null;
+  /** Present only when a quote-backed order has merchant lifecycle context. */
+  merchant_res?: MerchantResponseState;
 }
 
 interface ProductStatusInput {
@@ -405,13 +407,13 @@ router.get('/payment-status/:sessionId', async (req: Request, res: Response) => 
     const credentialReady =
       data.status === 'awaiting_result' &&
       transactions.some((transaction) =>
-        transaction.line_items.some(
+        transaction.line_items?.some(
           (lineItem) =>
             Boolean(lineItem.token) &&
             Boolean(lineItem.dynamic_cvv) &&
             Boolean(lineItem.expiry_month) &&
             Boolean(lineItem.expiry_year)
-        )
+        ) ?? false
       );
     const safeError =
       data.error ?? transactions.find((transaction) => transaction.error)?.error;
@@ -424,7 +426,9 @@ router.get('/payment-status/:sessionId', async (req: Request, res: Response) => 
       ...(safeError
         ? { error: { code: safeError.code, message: safeError.message } }
         : {}),
-      ...(data.shop_pay?.status ? { shop_pay_status: data.shop_pay.status } : {}),
+      ...(data.merchant_res?.status
+        ? { merchant_res_status: data.merchant_res.status }
+        : {}),
     });
   } catch (error) {
     console.error('[Prava] Failed to get payment status:', error);
